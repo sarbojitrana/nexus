@@ -1,21 +1,18 @@
 package handler
 
 import (
-	"github.com/sarbojitrana/go-boilerplate/internal/service"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
+	"github.com/sarbojitrana/nexus/internal/server"
+	"github.com/sarbojitrana/nexus/internal/service"
 )
 
-
-
-type Handlers struct{
-	Health *HealthHandler
+type Handlers struct {
+	Health  *HealthHandler
 	OpenAPI *OpenAPIHandler
 }
 
-
-func NewHandlers( s *server.Server, services *service.Services) *Handlers{
+func NewHandlers(s *server.Server, services *service.Services) *Handlers {
 	return &Handlers{
-		Health: NewHealthHandler(s),
+		Health:  NewHealthHandler(s),
 		OpenAPI: NewOpenAPIHandler(s),
 	}
 }

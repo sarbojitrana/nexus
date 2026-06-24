@@ -64,8 +64,8 @@ func LoadConfig() (*Config, error){
 
 	k := koanf.New(".")
 
-	err := k.Load(env.Provider("BOILERPLATE_", ".", func(s string) string{
-		return strings.ToLower(strings.TrimPrefix(s,"BOILERPLATE_"))
+	err := k.Load(env.Provider("NEXUS_", ".", func(s string) string{
+		return strings.ToLower(strings.TrimPrefix(s,"NEXUS_"))
 	}), nil)
 
 	if(err != nil){

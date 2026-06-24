@@ -1,4 +1,4 @@
-module github.com/sarbojitrana/go-boilerplate
+module github.com/sarbojitrana/nexus
 
 go 1.25.7
 

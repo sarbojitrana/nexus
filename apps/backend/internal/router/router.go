@@ -1,21 +1,18 @@
 package router
 
-
 import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/sarbojitrana/go-boilerplate/internal/handler"
-	"github.com/sarbojitrana/go-boilerplate/internal/middleware"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
-	"github.com/sarbojitrana/go-boilerplate/internal/service"
+	"github.com/sarbojitrana/nexus/internal/handler"
+	"github.com/sarbojitrana/nexus/internal/middleware"
+	"github.com/sarbojitrana/nexus/internal/server"
+	"github.com/sarbojitrana/nexus/internal/service"
 	"golang.org/x/time/rate"
 )
 
-
-
-func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services) *echo.Echo{
+func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services) *echo.Echo {
 	middlewares := middleware.NewMiddlewares(s)
 
 	router := echo.New()
@@ -25,10 +22,10 @@ func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services
 	//global middlewares
 	router.Use(
 		echoMiddleware.RateLimiterWithConfig(echoMiddleware.RateLimiterConfig{
-			Store : echoMiddleware.NewRateLimiterMemoryStore(rate.Limit(20)),
-			DenyHandler: func( c echo.Context, identifier string, err error) error{
+			Store: echoMiddleware.NewRateLimiterMemoryStore(rate.Limit(20)),
+			DenyHandler: func(c echo.Context, identifier string, err error) error {
 				// Record rate limit hit metrics
-				if rateLimitMiddleware := middlewares.RateLimit; rateLimitMiddleware != nil{
+				if rateLimitMiddleware := middlewares.RateLimit; rateLimitMiddleware != nil {
 					rateLimitMiddleware.RecordRateLimitHit(c.Path())
 				}
 
@@ -38,7 +35,7 @@ func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services
 					Str("path", c.Path()).
 					Str("ip", c.RealIP()).
 					Msg("rate limit exceeded")
-				
+
 				return echo.NewHTTPError(http.StatusTooManyRequests, "Rate limit exceeded")
 			},
 		}),

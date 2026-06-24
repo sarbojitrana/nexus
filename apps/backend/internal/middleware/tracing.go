@@ -5,57 +5,50 @@ import (
 	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
 	"github.com/newrelic/go-agent/v3/integrations/nrpkgerrors"
 	"github.com/newrelic/go-agent/v3/newrelic"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
-
+	"github.com/sarbojitrana/nexus/internal/server"
 )
 
-
-type TracingMiddleware struct{
+type TracingMiddleware struct {
 	server *server.Server
-	nrApp *newrelic.Application
+	nrApp  *newrelic.Application
 }
 
-
-func NewTracingMiddleware(s *server.Server, nrApp *newrelic.Application) *TracingMiddleware{
+func NewTracingMiddleware(s *server.Server, nrApp *newrelic.Application) *TracingMiddleware {
 	return &TracingMiddleware{
-		server : s,
-		nrApp : nrApp,
+		server: s,
+		nrApp:  nrApp,
 	}
 
 }
 
-
-
-func (tm *TracingMiddleware) NewRelicMiddleware() echo.MiddlewareFunc{
+func (tm *TracingMiddleware) NewRelicMiddleware() echo.MiddlewareFunc {
 	// return a no-op middleware if new relic is not running
-	if tm.nrApp == nil{
-		return func(next echo.HandlerFunc) echo.HandlerFunc{
+	if tm.nrApp == nil {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
 			return next
 		}
 	}
 	return nrecho.Middleware(tm.nrApp)
 }
 
-
-func (tm *TracingMiddleware) EchanceTracing() echo.MiddlewareFunc{
-	return func(next echo.HandlerFunc) echo.HandlerFunc{
-		return func( c echo.Context) error{
+func (tm *TracingMiddleware) EchanceTracing() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
 			txn := newrelic.FromContext(c.Request().Context())
-			
 
-			if txn == nil{
+			if txn == nil {
 				return next(c)
 			}
 
 			txn.AddAttribute("http.real_ip", c.RealIP())
 			txn.AddAttribute("http.user_agent", c.Request().UserAgent())
 
-			if requestID := GetRequestID(c) ; requestID != ""{
+			if requestID := GetRequestID(c); requestID != "" {
 				txn.AddAttribute("request.id", requestID)
 			}
 
-			if userID := c.Get("user_id"); userID != nil{
-				if userIDStr, ok :=  userID.(string) ; ok{
+			if userID := c.Get("user_id"); userID != nil {
+				if userIDStr, ok := userID.(string); ok {
 					txn.AddAttribute("user.id", userIDStr)
 				}
 			}
@@ -63,10 +56,9 @@ func (tm *TracingMiddleware) EchanceTracing() echo.MiddlewareFunc{
 			err := next(c)
 
 			// Record error if any with enchanced stack traces
-			if err != nil{
+			if err != nil {
 				txn.NoticeError(nrpkgerrors.Wrap(err))
 			}
-
 
 			// Add response status
 
@@ -75,4 +67,3 @@ func (tm *TracingMiddleware) EchanceTracing() echo.MiddlewareFunc{
 		}
 	}
 }
-

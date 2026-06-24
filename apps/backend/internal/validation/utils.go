@@ -3,84 +3,79 @@ package validation
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"regexp"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
-	"github.com/sarbojitrana/go-boilerplate/internal/errs"
+	"github.com/sarbojitrana/nexus/internal/errs"
 )
 
-
-type Validatable interface{
+type Validatable interface {
 	Validate() error
 }
 
-
-type CustomValidationError struct{
-	Field string
+type CustomValidationError struct {
+	Field   string
 	Message string
 }
-
 
 type CustomValidationErrors []CustomValidationError
 
 // can be used as error inteface
-func (c CustomValidationErrors) Error() string{
+func (c CustomValidationErrors) Error() string {
 	return "Validation failed"
 }
 
-func BindAndValidate( c echo.Context, payload Validatable) error{
-	if err := c.Bind(payload) ; err != nil{
+func BindAndValidate(c echo.Context, payload Validatable) error {
+	if err := c.Bind(payload); err != nil {
 		message := strings.Split(strings.Split(err.Error(), ",")[1], "message=")[1]
 		return errs.NewBadRequestError(message, false, nil, nil, nil)
 	}
 
-	if msg, fieldErrors := validateStruct(payload) ; fieldErrors != nil{
+	if msg, fieldErrors := validateStruct(payload); fieldErrors != nil {
 		return errs.NewBadRequestError(msg, true, nil, fieldErrors, nil)
 	}
 	return nil
 }
 
-
-func validateStruct( v Validatable) (string, []errs.FieldError){
-	if err := v.Validate(); err != nil{
+func validateStruct(v Validatable) (string, []errs.FieldError) {
+	if err := v.Validate(); err != nil {
 		return extractValidationErrors(err)
 	}
 
 	return "", nil
 }
 
-
-func extractValidationErrors(err error) (string, [] errs.FieldError){
+func extractValidationErrors(err error) (string, []errs.FieldError) {
 	var fieldErrors []errs.FieldError
 	validationErrors, ok := err.(validator.ValidationErrors)
 
 	if !ok {
 		customValidationErrors := err.(CustomValidationErrors)
-		for _, err := range customValidationErrors{
+		for _, err := range customValidationErrors {
 			fieldErrors = append(fieldErrors, errs.FieldError{
-				Field : err.Field,
+				Field: err.Field,
 				Error: err.Message,
 			})
 		}
 	}
 
-	for _, err := range validationErrors{
+	for _, err := range validationErrors {
 		field := strings.ToLower(err.Field())
 		var msg string
 
-		switch err.Tag(){
-		case "required" :
-			if err.Type().Kind() == reflect.String{
+		switch err.Tag() {
+		case "required":
+			if err.Type().Kind() == reflect.String {
 				msg = fmt.Sprintf("must be at least %s characters", err.Param())
-			} else{
+			} else {
 				msg = fmt.Sprintf("must be at least %s", err.Param())
 			}
 		case "max":
-			if err.Type().Kind() == reflect.String{
+			if err.Type().Kind() == reflect.String {
 				msg = fmt.Sprintf("must not exceed %s characters", err.Param())
-			} else{
+			} else {
 				msg = fmt.Sprintf("must not exceed %s", err.Param())
 			}
 		case "oneof":
@@ -96,16 +91,16 @@ func extractValidationErrors(err error) (string, [] errs.FieldError){
 		case "dive":
 			msg = "some items are invalid"
 		default:
-			if err.Param() != ""{
+			if err.Param() != "" {
 				msg = fmt.Sprintf("%s: %s:%s", field, err.Tag(), err.Param())
-			} else{
+			} else {
 				msg = fmt.Sprintf("%s: %s", field, err.Tag())
 			}
 
 		}
 
 		fieldErrors = append(fieldErrors, errs.FieldError{
-			Field : strings.ToLower(err.Field()),
+			Field: strings.ToLower(err.Field()),
 			Error: msg,
 		})
 	}

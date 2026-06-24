@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sarbojitrana/go-boilerplate/internal/middleware"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
+	"github.com/sarbojitrana/nexus/internal/middleware"
+	"github.com/sarbojitrana/nexus/internal/server"
 
 	"github.com/labstack/echo/v4"
 )

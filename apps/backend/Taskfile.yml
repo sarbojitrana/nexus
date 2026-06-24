@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  BOILERPLATE_DB_DSN: '{{.BOILERPLATE_DB_DSN | default ""}}'
+  NEXUS_DB_DSN: '{{.NEXUS_DB_DSN | default ""}}'
 
 tasks:
   help:
@@ -19,9 +19,9 @@ tasks:
     internal: true
 
   run:
-    desc: run the cmd/go-boilerplate application
+    desc: run the cmd/nexus application
     cmds:
-    - go run ./cmd/go-boilerplate
+    - go run ./cmd/nexus
 
   migrations:new:
     desc: create a new database migration
@@ -42,7 +42,7 @@ tasks:
     deps: [ confirm ]
     cmds:
     - echo 'Running up migrations...'
-    - tern migrate -m ./internal/database/migrations --conn-string {{.BOILERPLATE_DB_DSN}}
+    - tern migrate -m ./internal/database/migrations --conn-string {{.NEXUS_DB_DSN}}
 
   tidy:
     desc: format all .go files, and tidy and vendor module dependencies

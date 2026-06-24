@@ -1,5 +1,5 @@
 {
-  "name": "@boilerplate/emails",
+  "name": "@nexus/emails",
   "version": "1.0.0",
   "description": "Package to manage emails",
   "type": "module",

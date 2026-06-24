@@ -1,44 +1,43 @@
 package middleware
 
-import(
+import (
 	"net/http"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/sarbojitrana/go-boilerplate/internal/errs"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
-	"github.com/sarbojitrana/go-boilerplate/internal/sqlerr"
+	"github.com/sarbojitrana/nexus/internal/errs"
+	"github.com/sarbojitrana/nexus/internal/server"
+	"github.com/sarbojitrana/nexus/internal/sqlerr"
 )
 
-
-type GlobalMiddlewares struct{
+type GlobalMiddlewares struct {
 	server *server.Server
 }
 
-func NewGlobalMiddlewares(s *server.Server) *GlobalMiddlewares{
+func NewGlobalMiddlewares(s *server.Server) *GlobalMiddlewares {
 	return &GlobalMiddlewares{
-		server : s,
+		server: s,
 	}
 }
 
-
-func (global *GlobalMiddlewares) CORS() echo.MiddlewareFunc{
+func (global *GlobalMiddlewares) CORS() echo.MiddlewareFunc {
 	return middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: global.server.Config.Server.CORSAllowedOrigins,
 	})
 }
 
-func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc{
-	return middleware.RequestLoggerWithConfig( middleware.RequestLoggerConfig{
-		LogURI: true,
-		LogStatus: true,
-		LogError: true,
+func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc {
+	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogURI:     true,
+		LogStatus:  true,
+		LogError:   true,
 		LogLatency: true,
-		LogHost: true,
-		LogMethod: true,
+		LogHost:    true,
+		LogMethod:  true,
 		LogURIPath: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error{
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			statusCode := v.Status
 
 			// note that the status code is not set yet as it gets picked up by the global err handler
@@ -48,9 +47,9 @@ func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc{
 				var httpErr *errs.HTTPError
 				var echoErr *errs.HTTPError
 
-				if errors.As(v.Error, &httpErr){
+				if errors.As(v.Error, &httpErr) {
 					statusCode = httpErr.Status
-				} else if errors.As(v.Error, &echoErr){
+				} else if errors.As(v.Error, &echoErr) {
 					statusCode = echoErr.Status
 				}
 			}
@@ -59,8 +58,7 @@ func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc{
 
 			var e *zerolog.Event
 
-
-			switch{
+			switch {
 			case statusCode >= 500:
 				e = logger.Error().Err(v.Error)
 			case statusCode >= 400:
@@ -69,11 +67,11 @@ func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc{
 				e = logger.Info()
 			}
 
-			if requestID := GetRequestID(c) ; requestID != ""{
+			if requestID := GetRequestID(c); requestID != "" {
 				e = e.Str("request_id", requestID)
 			}
 
-			if userID := GetUserID(c) ; userID != "" {
+			if userID := GetUserID(c); userID != "" {
 				e = e.Str("user_id", userID)
 			}
 
@@ -86,7 +84,7 @@ func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc{
 				Str("ip", c.RealIP()).
 				Str("user_agent", c.Request().UserAgent()).
 				Msg("API")
-			
+
 			return nil
 
 		},
@@ -94,31 +92,30 @@ func (global *GlobalMiddlewares) RequestLogger() echo.MiddlewareFunc{
 }
 
 // handle situation when server crashes unexpectedly
-func (global *GlobalMiddlewares) Recover() echo.MiddlewareFunc{
+func (global *GlobalMiddlewares) Recover() echo.MiddlewareFunc {
 	return middleware.Recover()
 }
 
-
 // add recommended security headers
-func (global *GlobalMiddlewares) Secure() echo.MiddlewareFunc{
+func (global *GlobalMiddlewares) Secure() echo.MiddlewareFunc {
 	return middleware.Secure()
 }
 
-func (global *GlobalMiddlewares) GlobalErrorHandler( err error, c echo.Context){
+func (global *GlobalMiddlewares) GlobalErrorHandler(err error, c echo.Context) {
 	// First try to handle database errors and convert them to appropriate HTTP errors
 	originalErr := err
 
 	// Try to handle known database errors
 	// Only do this for errors that haven't already been converted to HTTPError
 	var httpErr *errs.HTTPError
-	if !errors.As(err, &httpErr){
+	if !errors.As(err, &httpErr) {
 		var echoErr *echo.HTTPError
 
-		if errors.As(err, &echoErr){
-			if echoErr.Code == http.StatusNotFound{
+		if errors.As(err, &echoErr) {
+			if echoErr.Code == http.StatusNotFound {
 				err = errs.NewNotFoundError("Route not found", false, nil)
 			}
-		} else{
+		} else {
 			// Here we call our sqlerr handler which will convert database errors
 			// to appropriate application errors
 			err = sqlerr.HandleError(err)
@@ -128,7 +125,6 @@ func (global *GlobalMiddlewares) GlobalErrorHandler( err error, c echo.Context){
 
 	// Now process the possibly converted error
 
-
 	var echoErr *echo.HTTPError
 	var status int
 	var code string
@@ -136,19 +132,19 @@ func (global *GlobalMiddlewares) GlobalErrorHandler( err error, c echo.Context){
 	var fieldErrors []errs.FieldError
 	var action *errs.Action
 
-	switch{
+	switch {
 	case errors.As(err, &httpErr):
 		status = httpErr.Status
 		code = httpErr.Code
 		message = httpErr.Message
 		fieldErrors = httpErr.Errors
 		action = httpErr.Action
-	case errors.As(err, &echoErr) :
+	case errors.As(err, &echoErr):
 		status = echoErr.Code
 		code = errs.MakeUpperCaseWithUnderscores(http.StatusText(status))
-		if msg, ok := echoErr.Message.(string); ok{
+		if msg, ok := echoErr.Message.(string); ok {
 			message = msg
-		} else{
+		} else {
 			message = http.StatusText(echoErr.Code)
 		}
 	default:
@@ -167,8 +163,7 @@ func (global *GlobalMiddlewares) GlobalErrorHandler( err error, c echo.Context){
 		Str("error_code", code).
 		Msg(message)
 
-	
-	if !c.Response().Committed{
+	if !c.Response().Committed {
 		_ = c.JSON(status, errs.HTTPError{
 			Code:     code,
 			Message:  message,
@@ -179,14 +174,4 @@ func (global *GlobalMiddlewares) GlobalErrorHandler( err error, c echo.Context){
 		})
 	}
 
-
 }
-
-
-
-
-
-
-
-
-

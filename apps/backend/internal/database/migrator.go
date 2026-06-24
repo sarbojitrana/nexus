@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	tern "github.com/jackc/tern/v2/migrate"
 	"github.com/rs/zerolog"
-	"github.com/sarbojitrana/go-boilerplate/internal/config"
+	"github.com/sarbojitrana/nexus/internal/config"
 )
 
 //go:embed migrations/*.sql

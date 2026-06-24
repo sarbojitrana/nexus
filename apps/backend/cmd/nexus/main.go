@@ -8,23 +8,21 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/sarbojitrana/go-boilerplate/internal/config"
-	"github.com/sarbojitrana/go-boilerplate/internal/database"
-	"github.com/sarbojitrana/go-boilerplate/internal/handler"
-	"github.com/sarbojitrana/go-boilerplate/internal/logger"
-	"github.com/sarbojitrana/go-boilerplate/internal/repository"
-	"github.com/sarbojitrana/go-boilerplate/internal/router"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
-	"github.com/sarbojitrana/go-boilerplate/internal/service"
+	"github.com/sarbojitrana/nexus/internal/config"
+	"github.com/sarbojitrana/nexus/internal/database"
+	"github.com/sarbojitrana/nexus/internal/handler"
+	"github.com/sarbojitrana/nexus/internal/logger"
+	"github.com/sarbojitrana/nexus/internal/repository"
+	"github.com/sarbojitrana/nexus/internal/router"
+	"github.com/sarbojitrana/nexus/internal/server"
+	"github.com/sarbojitrana/nexus/internal/service"
 )
-
 
 const DefaultContextTimeout = 30
 
-
-func main(){
+func main() {
 	cfg, err := config.LoadConfig()
-	if err != nil{
+	if err != nil {
 		panic("failed to load config: " + err.Error())
 	}
 
@@ -34,8 +32,8 @@ func main(){
 
 	log := logger.NewLoggerWithService(cfg.Observability, loggerService)
 
-	if cfg.Primary.Env != "local"{
-		if err := database.Migrate(context.Background(), &log, cfg) ; err != nil{
+	if cfg.Primary.Env != "local" {
+		if err := database.Migrate(context.Background(), &log, cfg); err != nil {
 			log.Fatal().Err(err).Msg("failed to migrate database")
 		}
 	}
@@ -43,7 +41,7 @@ func main(){
 	//Initialize server
 	srv, err := server.New(cfg, &log, loggerService)
 
-	if err != nil{
+	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize server")
 	}
 
@@ -52,7 +50,7 @@ func main(){
 	repos := repository.NewRepositories(srv)
 	services, serviceErr := service.NewServices(srv, repos)
 
-	if serviceErr != nil{
+	if serviceErr != nil {
 		log.Fatal().Err(serviceErr).Msg("could not create services")
 	}
 
@@ -70,18 +68,17 @@ func main(){
 
 	// Start server
 
-	go func(){
-		if err = srv.Start() ; err != nil && !errors.Is(err, http.ErrServerClosed){
+	go func() {
+		if err = srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Msg("failed to start server")
 		}
 	}()
-	
+
 	// Wait for interrupt signal to gracefully shutdown the server
 	<-ctx.Done()
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultContextTimeout*time.Second)
 
-
-	if err = srv.Shutdown(ctx) ; err != nil{
+	if err = srv.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("server forced to shutdown")
 	}
 

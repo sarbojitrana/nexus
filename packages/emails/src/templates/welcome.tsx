@@ -24,12 +24,12 @@ export const WelcomeEmail = ({
   return (
     <Html>
       <Head />
-      <Preview>Welcome to Boilerplate</Preview>
+      <Preview>Welcome to Nexus</Preview>
       <Tailwind>
         <Body className="bg-gray-100 font-sans">
           <Container className="bg-white p-8 rounded-lg shadow-sm my-10 mx-auto max-w-[600px]">
             <Heading className="text-2xl font-bold text-gray-800 mt-4">
-              Welcome to Boilerplate!
+              Welcome to Nexus!
             </Heading>
 
             <Section>

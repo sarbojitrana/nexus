@@ -6,31 +6,29 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/rs/zerolog"
-	"github.com/sarbojitrana/go-boilerplate/internal/logger"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
+	"github.com/sarbojitrana/nexus/internal/logger"
+	"github.com/sarbojitrana/nexus/internal/server"
 )
-
 
 const (
-	UserIDKey = "user_id"
+	UserIDKey   = "user_id"
 	UserRoleKey = "user_role"
-	LoggerKey = "logger"
+	LoggerKey   = "logger"
 )
 
-type ContextEnhancer struct{
+type ContextEnhancer struct {
 	server *server.Server
 }
 
-func NewContextEnhancer (s *server.Server) *ContextEnhancer{
+func NewContextEnhancer(s *server.Server) *ContextEnhancer {
 	return &ContextEnhancer{
-		server : s,
+		server: s,
 	}
 }
 
-
-func (ce *ContextEnhancer) EnhanceContext() echo.MiddlewareFunc{
-	return func(next echo.HandlerFunc) echo.HandlerFunc{
-		return func(c echo.Context) error{
+func (ce *ContextEnhancer) EnhanceContext() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
 
 			requestID := GetRequestID(c)
 
@@ -41,52 +39,49 @@ func (ce *ContextEnhancer) EnhanceContext() echo.MiddlewareFunc{
 				Str("path", c.Path()).
 				Str("ip", c.RealIP()).
 				Logger()
-				
+
 			// Add trace context if available
 
-			if txn := newrelic.FromContext(c.Request().Context()) ; txn != nil{
+			if txn := newrelic.FromContext(c.Request().Context()); txn != nil {
 				contextLogger = logger.WithTraceContext(contextLogger, txn)
 			}
 
-			if userID := ce.extractUserID(c) ; userID != "" {
+			if userID := ce.extractUserID(c); userID != "" {
 				contextLogger = contextLogger.With().Str("user_id", userID).Logger()
 			}
 
-			if userRole := ce.extractUserRole(c) ; userRole != "" {
+			if userRole := ce.extractUserRole(c); userRole != "" {
 				contextLogger = contextLogger.With().Str("user_role", userRole).Logger()
 			}
 
 			// Store the enhanced logger in context
 
 			c.Set(LoggerKey, &contextLogger)
-		
-			// Create a new context with the logger 
-			
-			ctx := context.WithValue(c.Request().Context() , LoggerKey, &contextLogger)
+
+			// Create a new context with the logger
+
+			ctx := context.WithValue(c.Request().Context(), LoggerKey, &contextLogger)
 			c.SetRequest(c.Request().WithContext(ctx))
 
 			return next(c)
-		
-		
+
 		}
 	}
 }
 
-
-func (ce *ContextEnhancer) extractUserID(c echo.Context) string{
+func (ce *ContextEnhancer) extractUserID(c echo.Context) string {
 	// Check if user_id was already set by Clerk
 
-	if userID, ok := c.Get("user_id").(string) ; ok && userID != ""{
+	if userID, ok := c.Get("user_id").(string); ok && userID != "" {
 		return userID
 	}
 	return ""
 }
 
-
-func (ce *ContextEnhancer) extractUserRole(c echo.Context) string{
+func (ce *ContextEnhancer) extractUserRole(c echo.Context) string {
 	// check if user_role was set by Clerk
 
-	if userRole, ok := c.Get("user_role").(string); ok && userRole != ""{
+	if userRole, ok := c.Get("user_role").(string); ok && userRole != "" {
 		return userRole
 	}
 	return ""

@@ -1,22 +1,22 @@
 package middleware
 
-import(
+import (
 	"github.com/newrelic/go-agent/v3/newrelic"
-	"github.com/sarbojitrana/go-boilerplate/internal/server"
+	"github.com/sarbojitrana/nexus/internal/server"
 )
 
-type Middlewares struct{
-	Global			*GlobalMiddlewares
-	Auth			*AuthMiddleware
-	ContextEnhancer	*ContextEnhancer
-	Tracing			*TracingMiddleware
-	RateLimit		*RateLimitMiddleware
+type Middlewares struct {
+	Global          *GlobalMiddlewares
+	Auth            *AuthMiddleware
+	ContextEnhancer *ContextEnhancer
+	Tracing         *TracingMiddleware
+	RateLimit       *RateLimitMiddleware
 }
 
-func NewMiddlewares( s *server.Server) *Middlewares{
+func NewMiddlewares(s *server.Server) *Middlewares {
 	var nrApp *newrelic.Application
-	
-	if s.LoggerService != nil{
+
+	if s.LoggerService != nil {
 		nrApp = s.LoggerService.GetApplication()
 	}
 

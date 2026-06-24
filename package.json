@@ -1,5 +1,5 @@
 {
-  "name": "go_boilerplate",
+  "name": "go_nexus",
   "version": "1.0.0",
   "scripts": {
     "build": "turbo run build",
