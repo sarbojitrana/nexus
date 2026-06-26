@@ -73,6 +73,7 @@ func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerConfig
 		cfg.Database.Name,
 		cfg.Database.SSLMode,
 	)
+	fmt.Println(dsn)
 
 	pgxPoolConfig, err := pgxpool.ParseConfig(dsn)
 
