@@ -29,11 +29,14 @@ type Post struct {
 	PostType     PostType   `json:"postType" db:"post_type"`
 	Title        *string    `json:"title" db:"title"`
 	Content      *string    `json:"content" db:"content"`
+	Upvotes      int        `json:"upvotes" db:"upvotes"`
+	Downvotes    int        `json:"downvotes" db:"downvotes"`
 	DeletedAt    *time.Time `json:"deletedAt" db:"deleted_at"`
 }
 
 type PostMedia struct {
 	model.BaseWithId
+	UserID      uuid.UUID `json:"userId" db:"user_id"`
 	PostID      uuid.UUID `json:"postId" db:"post_id"`
 	DownloadKey string    `json:"downloadKey" db:"download_key"`
 	FileSize    int64     `json:"fileSize" db:"file_size"`
@@ -42,9 +45,15 @@ type PostMedia struct {
 }
 
 type PostVote struct {
-	PostID    uuid.UUID `json:"postId" db:"post_id"`
-	UserID    uuid.UUID `json:"userId" db:"user_id"`
-	VoteType  VoteType  `json:"voteType" db:"vote_type"`
+	PostID   uuid.UUID `json:"postId" db:"post_id"`
+	UserID   uuid.UUID `json:"userId" db:"user_id"`
+	VoteType VoteType  `json:"voteType" db:"vote_type"`
 	model.BaseWithCreatedAt
 	model.BaseWithUpdatedAt
+}
+
+type PopulatedPost struct {
+	Post
+	PostMedia []PostMedia `json:"postMedia" db:"post_media"`
+	Comments  []Post      `json:"comments" db:"comments"`
 }

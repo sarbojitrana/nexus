@@ -24,10 +24,16 @@ type Base struct {
 	BaseWithUpdatedAt
 }
 
-type PaginatedResponse[T interface{}] struct {
+type OffsetPaginatedResponse[T any] struct {
 	Data       []T `json:"data"`
 	Page       int `json:"page"`
 	Limit      int `json:"limit"`
 	Total      int `json:"total"`
 	TotalPages int `json:"totalPages"`
+}
+
+type CursorPaginatedResponse[T any] struct {
+	Data       []T    `json:"data"`
+	NextCursor string `json:"nextCursor"`
+	HasMore    bool   `json:"hasMore"`
 }
