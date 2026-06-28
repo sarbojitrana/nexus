@@ -143,3 +143,118 @@ func (p *GetCommunitiesPayload) Validate() error {
 	}
 	return nil
 }
+
+//-------------------------------------------------------------------------------------------
+
+type ReportCommunityPostPayload struct {
+	ReporterID  uuid.UUID `json:"reporterId" validate:"required,uuid"`
+	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
+	PostID      uuid.UUID `json:"postId" validate:"required,uuid"`
+	Reason      string    `json:"reason" validate:"required,max=1000"`
+}
+
+func (p *ReportCommunityPostPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type ResolveCommunityPostReportPayload struct {
+	ReportID     uuid.UUID             `json:"reportId" validate:"required,uuid"`
+	ReportStatus CommunityReportStatus `json:"reportStatus" validate:"required,oneof=dismissed resolved pending"`
+	CommunityID  uuid.UUID             `json:"communityId" validate:"required,uuid"`
+	ModeratorID  uuid.UUID             `json:"moderatorId" validate:"required,uuid"`
+}
+
+func (p *ResolveCommunityPostReportPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type DeleteCommunityPostPayload struct {
+	PostID      uuid.UUID `json:"postId" validate:"required,uuid"`
+	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
+	ModeratorID uuid.UUID `json:"moderatorId" validate:"required,uuid"`
+}
+
+func (p *DeleteCommunityPostPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type ChangeCommunityRolePayload struct {
+	UserID      uuid.UUID     `json:"userId" validate:"required,uuid"`
+	Role        CommunityRole `json:"role" validate:"required,oneof=admin moderator member"`
+	CommunityID uuid.UUID     `json:"communityId" validate:"required,uuid"`
+	ModeratorID uuid.UUID     `json:"moderatorId" validate:"required,uuid"`
+}
+
+func (p *ChangeCommunityRolePayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type BanCommunityMemberPayload struct {
+	UserID      uuid.UUID `json:"userId" validate:"required,uuid"`
+	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
+	ModeratorID uuid.UUID `json:"moderatorId" validate:"required,uuid"`
+}
+
+func (p *BanCommunityMemberPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type KickCommunityMemberPayload struct {
+	UserID      uuid.UUID `json:"userId" validate:"required,uuid"`
+	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
+	ModeratorID uuid.UUID `json:"moderatorId" validate:"required,uuid"`
+}
+
+func (p *KickCommunityMemberPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type GetReportByIDPayload struct {
+	ReportID uuid.UUID `json:"reportId" validate:"required,uuid"`
+}
+
+func (p *GetReportByIDPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-------------------------------------------------------------------------------------------
+
+type GetCommunityReportsPayload struct {
+	CommunityID       uuid.UUID              `json:"communityId" validate:"required,uuid"`
+	Status            *CommunityReportStatus `json:"statusId" validate:"omitempty,oneof=pending dismissed resolved"`
+	ReportedDateStart string                 `json:"reportedDateStart"`
+	ReportedDateEnd   string                 `json:"reportedDateEnd"`
+}
+
+func (p *GetCommunityReportsPayload) Validate() error {
+	validate := validator.New()
+	if err := validate.Struct(p); err != nil {
+		return err
+	}
+
+	if p.Status == nil {
+		defaultStatus := ReportPending
+		p.Status = &defaultStatus
+	}
+
+	return nil
+}

@@ -1,6 +1,7 @@
 CREATE TABLE
     users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+        email_id TEXT NOT NULL,
         clerk_id TEXT NOT NULL,
         username VARCHAR(50) NOT NULL,
         display_name VARCHAR(50) NOT NULL,
@@ -15,7 +16,7 @@ CREATE TABLE
     );
 
 CREATE INDEX idx_users_clerk_id ON users (clerk_id);
-
+CREATE INDEX idx_users_email_id ON users (email_id);
 CREATE UNIQUE INDEX idx_users_username ON users (username);
 
 CREATE TRIGGER set_updated_at_users BEFORE
@@ -80,6 +81,24 @@ CREATE INDEX idx_community_members_user_id ON community_members (user_id);
 
 CREATE TRIGGER set_updated_at_community_members BEFORE
 UPDATE ON community_members FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
+
+
+CREATE TABLE
+    communtiy_reports(
+        id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reporter_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
+        community_id UUID NOT NULL REFERENCES communities ON DELETE CASCADE,
+        post_id UUID NOT NULL REFERENCES posts ON DELETE CASCADE,
+        reason TEXT NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP 
+    );
+
+CREATE INDEX idx_community_reports_reporter_id ON communtiy_reports(reporter_id);
+CREATE INDEX idx_community_reports_post_id ON communtiy_reports(post_id);
+CREATE INDEX idx_community_reports_community_id ON communtiy_reports(community_id);
+CREATE INDEX idx_community_reports_status ON communtiy_reports(status);
 
 CREATE TABLE
     posts (

@@ -14,6 +14,13 @@ const (
 	AdminRole  CommunityRole = "admin"
 )
 
+type CommunityReportStatus string
+
+const (
+	ReportPending   CommunityReportStatus = "pending"
+	ReportResolved  CommunityReportStatus = "resolved"
+	ReportDismissed CommunityReportStatus = "dismissed"
+)
 type Community struct {
 	model.Base
 	AdminID      uuid.UUID `json:"adminId" db:"admin_id"`
@@ -36,7 +43,7 @@ type CommunityMember struct {
 
 type CommnunitySummary struct {
 	Name         string `json:"name" db:"name"`
-	AvatarKey    string `json:"avatarKey" db:"avatarKey"`
+	AvatarKey    string `json:"avatarKey" db:"avatar_key"`
 	MembersCount int    `json:"membersCount" db:"members_count"`
 	PostsCount   int    `json:"postsCount" db:"posts_count"`
 }
@@ -46,4 +53,13 @@ type CommnunityFollow struct {
 	model.BaseWithCreatedAt
 	FollowerID  uuid.UUID `json:"followerId" db:"follower_id"`
 	CommunityID uuid.UUID `json:"communityId" db:"community_id"`
+}
+
+type CommunityReport struct {
+	model.Base
+	ReporterID   uuid.UUID             `json:"reporterId" db:"reporter_id"`
+	CommnunityID uuid.UUID             `json:"communityId" db:"community_id"`
+	PostID       uuid.UUID             `json:"postId" db:"post_id"`
+	Reason       string                `json:"reason" db:"reason"`
+	Status       CommunityReportStatus `json:"status" db:"status"`
 }

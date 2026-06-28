@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   NEXUS_DB_DSN: '{{.NEXUS_DB_DSN | default ""}}'
@@ -7,49 +7,49 @@ tasks:
   help:
     desc: print this help message
     cmds:
-    - task --list-all
+      - task --list-all
     silent: true
 
   confirm:
     desc: confirmation prompt
     cmds:
-    - |
-      echo -n 'Are you sure? [y/N] ' && read ans && [ ${ans:-N} = y ]
+      - |
+        echo -n 'Are you sure? [y/N] ' && read ans && [ ${ans:-N} = y ]
     silent: true
     internal: true
 
   run:
     desc: run the cmd/nexus application
     cmds:
-    - go run ./cmd/nexus
+      - go run ./cmd/nexus
 
   migrations:new:
     desc: create a new database migration
     vars:
       NAME: '{{.name | default ""}}'
     cmds:
-    - |
-      if [ -z "{{.NAME}}" ]; then
-        echo "Error: name parameter is required"
-        echo "Usage: task migrations:new name=migration_name"
-        exit 1
-      fi
-    - echo 'Creating migration file for {{.NAME}}...'
-    - tern new -m ./internal/database/migrations {{.NAME}}
+      - |
+        if [ -z "{{.NAME}}" ]; then
+          echo "Error: name parameter is required"
+          echo "Usage: task migrations:new name=migration_name"
+          exit 1
+        fi
+      - echo 'Creating migration file for {{.NAME}}...'
+      - tern new -m ./internal/database/migrations {{.NAME}}
 
   migrations:up:
     desc: apply all up database migrations
-    deps: [ confirm ]
+    deps: [confirm]
     cmds:
-    - echo 'Running up migrations...'
-    - tern migrate -m ./internal/database/migrations --conn-string {{.NEXUS_DB_DSN}}
+      - echo 'Running up migrations...'
+      - tern migrate -m ./internal/database/migrations --conn-string {{.NEXUS_DB_DSN}}
 
   tidy:
     desc: format all .go files, and tidy and vendor module dependencies
     cmds:
-    - echo 'Formatting .go files...'
-    - go fmt ./...
-    - echo 'Tidying module dependencies...'
-    - go mod tidy
-    - echo 'Verifying dependencies...'
-    - go mod verify
+      - echo 'Formatting .go files...'
+      - go fmt ./...
+      - echo 'Tidying module dependencies...'
+      - go mod tidy
+      - echo 'Verifying dependencies...'
+      - go mod verify

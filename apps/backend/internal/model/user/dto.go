@@ -10,7 +10,11 @@ import (
 type CreateUserPayload struct {
 	Username    string `json:"username" validate:"required"`
 	DisplayName string `json:"displayName" validate:"required"`
+	EmailID		string	`json:"emailId" validate:"required"`
 	ClerkID     string `json:"clerkId" validate:"required"`
+	Bio 		*string	`json:"bio" validate:"omitempty,max=1000"`
+	AvatarKey	*string	`json:"avatarKey"`
+	BannerKey	*string	`json:"bannerKey"`
 }
 
 func (p *CreateUserPayload) Validate() error {
@@ -23,6 +27,7 @@ func (p *CreateUserPayload) Validate() error {
 type UpdateUserPayload struct {
 	ID          uuid.UUID `json:"id" validate:"required,uuid"`
 	Username    *string   `json:"username" validate:"omitempty,max=50"`
+	EmailID		*string	`json:"emailId" validate:"required"`
 	DisplayName *string   `json:"displayName" validate:"omitempty,max=50"`
 	Bio         *string   `json:"bio" validate:"omitempty,max=1000"`
 	AvatarKey   *string   `json:"avatarKey" validate:"omitempty"`

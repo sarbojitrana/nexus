@@ -8,6 +8,7 @@ type User struct {
 	model.Base
 	ClerkID        string  `json:"clerkId" db:"clerk_id"`
 	Username       string  `json:"username" db:"username"`
+	EmailID        string  `json:"emailId" db:"email_id"`
 	DisplayName    string  `json:"displayName" db:"display_name"`
 	Bio            *string `json:"bio" db:"bio"`
 	AvatarKey      *string `json:"avatarKey" db:"avatar_key"`
