@@ -47,8 +47,8 @@ func (p *UpdatePostByIDPayload) Validate() error {
 
 //-------------------------------------------------------------------------------------------
 
-type GetPostByIDPayload struct{
-	ID 		uuid.UUID
+type GetPostByIDPayload struct {
+	ID uuid.UUID
 }
 
 //-------------------------------------------------------------------------------------------
@@ -58,7 +58,7 @@ type GetPostsPayload struct {
 	CommunityID      *uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
 	ParentPostID     *uuid.UUID `json:"parentPostId" validate:"omitempty,uuid"`
 	NextCursor       *string    `json:"nextCursor"`
-	Sort             *string    `json:"sort" validate:"omitempty,oneof=created_at upvotes downvotes"`
+	SortBy           *string    `json:"sortBy" validate:"omitempty,oneof=created_at upvotes downvotes"`
 	Order            *string    `json:"order" validate:"omitempty,oneof=asc desc"`
 	DateCreatedStart *string    `json:"dateCreatedStart"`
 	DateCreatedEnd   *string    `json:"dateCreatedEnd"`
@@ -75,13 +75,13 @@ func (p *GetPostsPayload) Validate() error {
 		p.NextCursor = &defaultCursor
 	}
 
-	if p.Sort == nil {
-		defaultSort := "upvotes"
-		p.Sort = &defaultSort
+	if p.SortBy == nil {
+		defaultSort := "created_at"
+		p.SortBy = &defaultSort
 	}
 
 	if p.Order == nil {
-		defaultOrder := "desc"
+		defaultOrder := "asc"
 		p.Order = &defaultOrder
 	}
 
@@ -105,7 +105,7 @@ func (p *CreatePostMediaPayload) Validate() error {
 //-------------------------------------------------------------------------------------------
 
 type DeletePostMediaPayload struct {
-	ID uuid.UUID `json:"id" validate:"required,uuid"`
+	ID     uuid.UUID `json:"id" validate:"required,uuid"`
 	UserID uuid.UUID `json:"userId" validate:"required,uuid"`
 }
 
@@ -140,7 +140,7 @@ func (p *CreatePostVotePayload) Validate() error {
 //-------------------------------------------------------------------------------------------
 
 type DeletePostVotePayload struct {
-	ID uuid.UUID `json:"id" validate:"required,uuid"`
+	ID     uuid.UUID `json:"id" validate:"required,uuid"`
 	UserID uuid.UUID `json:"userId" validate:"required,uuid"`
 }
 

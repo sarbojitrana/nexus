@@ -57,3 +57,8 @@ type PopulatedPost struct {
 	PostMedia []PostMedia `json:"postMedia" db:"post_media"`
 	Comments  []Post      `json:"comments" db:"comments"`
 }
+
+type ViewPost struct{
+	Post
+	PostMedia []PostMedia `json:"postMedia" db:"post_media"`
+}

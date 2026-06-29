@@ -18,9 +18,21 @@ type User struct {
 	PostsCount     int     `json:"postsCount" db:"posts_count"`
 }
 
-type UserSummary struct {
-	Username      string `json:"username" db:"username"`
-	DisplayName   string `json:"displayName" db:"display_name"`
-	AvatarKey     string `json:"avatarKey" db:"avatarKey"`
-	FollowerCount string `json:"followerCount" db:"follower_count"`
+type MiniUser struct {
+	Username      string `json:"username"`
+	DisplayName   string `json:"displayName"`
+	AvatarKey     string `json:"avatarKey"`
+	FollowerCount string `json:"followerCount"`
+}
+
+type UserResponse struct{
+	model.Base
+	Username       string  `json:"username"`
+	DisplayName    string  `json:"displayName"`
+	Bio            *string `json:"bio"`
+	AvatarURL      *string `json:"avatarUrl"`
+	BannerURL      *string `json:"bannerUrl"`
+	FollowerCount  int     `json:"followerCount" `
+	FollowingCount int     `json:"followingCount"`
+	PostsCount     int     `json:"postsCount"`
 }

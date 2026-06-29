@@ -111,7 +111,7 @@ func (p *GetCommunityByIDPayload) Validate() error {
 type GetCommunitiesPayload struct {
 	Name             *string `json:"name" validate:"omitempty,max=50"`
 	NextCursor       *string `json:"nextCursor"`
-	Sort             *string `json:"sort" validate:"omitempty,oneof=created_at members_count posts_count"`
+	SortBy           *string `json:"sortBy" validate:"omitempty,oneof=created_at members_count posts_count"`
 	Order            *string `json:"order" validate:"omitempty,oneof=asc desc"`
 	DateCreatedStart *string `json:"dateCreatedStart"`
 	DateCreatedEnd   *string `json:"dateCreatedEnd"`
@@ -132,9 +132,9 @@ func (p *GetCommunitiesPayload) Validate() error {
 		defaultCursor := ""
 		p.NextCursor = &defaultCursor
 	}
-	if p.Sort == nil {
+	if p.SortBy == nil {
 		defaultSort := "members_count"
-		p.Sort = &defaultSort
+		p.SortBy = &defaultSort
 	}
 
 	if p.Order == nil {
