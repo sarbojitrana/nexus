@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/sarbojitrana/nexus/internal/model"
 )
 
 //-------------------------------------------------------------------------------------------
@@ -54,12 +55,12 @@ func (p *GetUserByIDPayload) Validate() error {
 //-------------------------------------------------------------------------------------------
 
 type GetUsersPayload struct {
-	NextCursor      *string `json:"nextCursor" validate:"omitempty"`
-	SortBy          *string `json:"sortBy" validate:"omitempty,oneof=created_at display_name follower_count following_count posts_count"`
-	Order           *string `json:"order" validate:"omitempty,oneof=asc desc"`
-	Name            *string `json:"name" validate:"omitempty"`
-	DateJoinedStart *string `json:"dateJoinedStart" validate:"omitempty"`
-	DateJoinedEnd   *string `json:"dateJoinedEnd" validate:"omitempty"`
+	NextCursor      *model.Cursor `json:"nextCursor" validate:"omitempty"`
+	SortBy          *model.SortBy `json:"sortBy" validate:"omitempty,oneof=created_at follower_count"`
+	Order           *model.Order  `json:"order" validate:"omitempty,oneof=asc desc"`
+	Name            *string       `json:"name" validate:"omitempty"`
+	DateJoinedStart *time.Time    `json:"dateJoinedStart" validate:"omitempty"`
+	DateJoinedEnd   *time.Time    `json:"dateJoinedEnd" validate:"omitempty"`
 }
 
 func (p *GetUsersPayload) Validate() error {
@@ -69,18 +70,13 @@ func (p *GetUsersPayload) Validate() error {
 		return err
 	}
 
-	if p.NextCursor == nil {
-		defaultCursor := ""
-		p.NextCursor = &defaultCursor
-	}
-
 	if p.SortBy == nil {
-		defaultSort := "follower_count"
-		p.SortBy = &defaultSort
+		defaultSortBy := model.SortByFollowerCount
+		p.SortBy = &defaultSortBy
 	}
 
 	if p.Order == nil {
-		defaultOrder := "desc"
+		defaultOrder := model.OrderDesc
 		p.Order = &defaultOrder
 	}
 
@@ -95,11 +91,11 @@ func (p *GetUsersPayload) Validate() error {
 //-------------------------------------------------------------------------------------------
 
 type GetPostsByUserIDPayload struct {
-	NextCursor       *string    `json:"nextCursor"`
-	SortBy           *string    `json:"sortBy" validate:"omitempty,oneof=created_at upvotes"`
-	Order            *string    `json:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *time.Time `json:"dateCreatedStart"`
-	DateCreatedEnd   *time.Time `json:"dateCreatedEnd"`
+	NextCursor       *model.Cursor `json:"nextCursor" valdate:"omitempty"`
+	SortBy           *model.SortBy `json:"sortBy" validate:"omitempty,oneof=created_at upvotes"`
+	Order            *model.Order  `json:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *time.Time    `json:"dateCreatedStart"`
+	DateCreatedEnd   *time.Time    `json:"dateCreatedEnd"`
 }
 
 func (p *GetPostsByUserIDPayload) Validate() error {
@@ -108,19 +104,16 @@ func (p *GetPostsByUserIDPayload) Validate() error {
 	if err := validate.Struct(p); err != nil {
 		return err
 	}
-	if p.NextCursor == nil {
-		defaultCursor := ""
-		p.NextCursor = &defaultCursor
-	}
 
 	if p.SortBy == nil {
-		defaultSort := "created_at"
-		p.SortBy = &defaultSort
+		defaultSortBy := model.SortByCreatedAt
+		p.SortBy = &defaultSortBy
 	}
 
 	if p.Order == nil {
-		defaultOrder := "desc"
+		defaultOrder := model.OrderDesc
 		p.Order = &defaultOrder
+
 	}
 
 	return nil

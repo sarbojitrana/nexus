@@ -1,8 +1,11 @@
 package post
 
 import (
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/sarbojitrana/nexus/internal/model"
 )
 
 //-------------------------------------------------------------------------------------------
@@ -54,14 +57,14 @@ type GetPostByIDPayload struct {
 //-------------------------------------------------------------------------------------------
 
 type GetPostsPayload struct {
-	AuthorID         *uuid.UUID `json:"authorId" validate:"omitempty,uuid"`
-	CommunityID      *uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
-	ParentPostID     *uuid.UUID `json:"parentPostId" validate:"omitempty,uuid"`
-	NextCursor       *string    `json:"nextCursor"`
-	SortBy           *string    `json:"sortBy" validate:"omitempty,oneof=created_at upvotes downvotes"`
-	Order            *string    `json:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *string    `json:"dateCreatedStart"`
-	DateCreatedEnd   *string    `json:"dateCreatedEnd"`
+	AuthorID         *uuid.UUID    `json:"authorId" validate:"omitempty,uuid"`
+	CommunityID      *uuid.UUID    `json:"communityId" validate:"omitempty,uuid"`
+	ParentPostID     *uuid.UUID    `json:"parentPostId" validate:"omitempty,uuid"`
+	NextCursor       *model.Cursor `json:"nextCursor" validate:"omitempty"`
+	SortBy           *model.SortBy `json:"sortBy" validate:"omitempty,oneof=created_at upvotes"`
+	Order            *model.Order  `json:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *time.Time    `json:"dateCreatedStart"`
+	DateCreatedEnd   *time.Time    `json:"dateCreatedEnd"`
 }
 
 func (p *GetPostsPayload) Validate() error {
@@ -70,21 +73,17 @@ func (p *GetPostsPayload) Validate() error {
 	if err := validate.Struct(p); err != nil {
 		return err
 	}
-	if p.NextCursor == nil {
-		defaultCursor := ""
-		p.NextCursor = &defaultCursor
-	}
 
 	if p.SortBy == nil {
-		defaultSort := "created_at"
-		p.SortBy = &defaultSort
+		defaultSortBy := model.SortByCreatedAt
+		p.SortBy = &defaultSortBy
+
 	}
 
 	if p.Order == nil {
-		defaultOrder := "asc"
+		defaultOrder := model.OrderDesc
 		p.Order = &defaultOrder
 	}
-
 	return nil
 }
 

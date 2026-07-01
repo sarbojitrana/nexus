@@ -1,6 +1,8 @@
 package user
 
 import (
+	"time"
+
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
@@ -19,13 +21,16 @@ type User struct {
 }
 
 type MiniUser struct {
-	Username      string `json:"username"`
-	DisplayName   string `json:"displayName"`
-	AvatarKey     string `json:"avatarKey"`
-	FollowerCount string `json:"followerCount"`
+	ID            string    `json:"id" db:"id"`
+	Username      string    `json:"username" db:"username"`
+	DisplayName   string    `json:"displayName" db:"display_name"`
+	AvatarKey     string    `json:"avatarKey" db:"avatar_key"`
+	Bio           string    `json:"bio" db:"bio"`
+	FollowerCount int       `json:"followerCount" db:"follower_count"`
+	CreatedAt     time.Time `json:"createdAt" db:"created_at"`
 }
 
-type UserResponse struct{
+type UserResponse struct {
 	model.Base
 	Username       string  `json:"username"`
 	DisplayName    string  `json:"displayName"`

@@ -6,6 +6,29 @@ import (
 	"github.com/google/uuid"
 )
 
+type SortBy string
+
+const (
+	SortByCreatedAt      SortBy = "created_at"
+	SortByUpvotes        SortBy = "upvotes"
+	SortByFollowerCount  SortBy = "follower_count"
+	SortByFollowingCount SortBy = "following_count"
+	SortByMembersCount   SortBy = "members_count"
+	SortByPostsCount     SortBy = "posts_count"
+)
+
+type Order string
+
+const (
+	OrderAsc  Order = "asc"
+	OrderDesc Order = "desc"
+)
+
+type Cursor struct {
+	SortValue string    `json:"sortValue"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type BaseWithId struct {
 	ID uuid.UUID `json:"id" db:"id"`
 }
@@ -33,7 +56,7 @@ type OffsetPaginatedResponse[T any] struct {
 }
 
 type CursorPaginatedResponse[T any] struct {
-	Data       []T    `json:"data"`
-	NextCursor string `json:"nextCursor"`
-	HasMore    bool   `json:"hasMore"`
+	Data []T `json:"data"`
+	Cursor
+	HasMore bool `json:"hasMore"`
 }

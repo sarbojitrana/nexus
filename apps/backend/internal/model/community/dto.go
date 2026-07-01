@@ -3,6 +3,7 @@ package community
 import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/sarbojitrana/nexus/internal/model"
 )
 
 //-------------------------------------------------------------------------------------------
@@ -109,12 +110,12 @@ func (p *GetCommunityByIDPayload) Validate() error {
 //-------------------------------------------------------------------------------------------
 
 type GetCommunitiesPayload struct {
-	Name             *string `json:"name" validate:"omitempty,max=50"`
-	NextCursor       *string `json:"nextCursor"`
-	SortBy           *string `json:"sortBy" validate:"omitempty,oneof=created_at members_count posts_count"`
-	Order            *string `json:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *string `json:"dateCreatedStart"`
-	DateCreatedEnd   *string `json:"dateCreatedEnd"`
+	Name             *string       `json:"name" validate:"omitempty,max=50"`
+	NextCursor       *model.Cursor `json:"nextCursor"`
+	SortBy           *string       `json:"sortBy" validate:"omitempty,oneof=created_at members_count posts_count"`
+	Order            *string       `json:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *string       `json:"dateCreatedStart"`
+	DateCreatedEnd   *string       `json:"dateCreatedEnd"`
 }
 
 func (p *GetCommunitiesPayload) Validate() error {
@@ -128,10 +129,6 @@ func (p *GetCommunitiesPayload) Validate() error {
 		p.Name = &defaultName
 	}
 
-	if p.NextCursor == nil {
-		defaultCursor := ""
-		p.NextCursor = &defaultCursor
-	}
 	if p.SortBy == nil {
 		defaultSort := "members_count"
 		p.SortBy = &defaultSort
