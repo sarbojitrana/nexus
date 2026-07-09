@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sarbojitrana/nexus/internal/model"
+	"github.com/sarbojitrana/nexus/internal/model/post"
 )
 
 type CommunityRole string
@@ -21,6 +22,7 @@ const (
 	ReportResolved  CommunityReportStatus = "resolved"
 	ReportDismissed CommunityReportStatus = "dismissed"
 )
+
 type Community struct {
 	model.Base
 	AdminID      uuid.UUID `json:"adminId" db:"admin_id"`
@@ -40,12 +42,21 @@ type CommunityMember struct {
 	JoinedAt    time.Time     `json:"joinedAt" db:"joined_at"`
 	model.BaseWithUpdatedAt
 }
-
+type MiniCommunity struct {
+	CommnunityID uuid.UUID `json:"communityId" db:"community_id"`
+	Name         string    `json:"communityName" db:"name"`
+	AvatarKey    string    `json:"communityAvatarKey" db:"avatar_key"`
+}
 type CommnunitySummary struct {
-	Name         string `json:"name" db:"name"`
-	AvatarKey    string `json:"avatarKey" db:"avatar_key"`
-	MembersCount int    `json:"membersCount" db:"members_count"`
-	PostsCount   int    `json:"postsCount" db:"posts_count"`
+	MiniCommunity
+	MembersCount int `json:"membersCount" db:"members_count"`
+	PostsCount   int `json:"postsCount" db:"posts_count"`
+}
+
+type ViewCommunityPost struct {
+	post.Post
+	PostMedia []post.PostMedia `json:"postMedia" db:"post_media"`
+	Community *MiniCommunity   `json:"miniCommunity" db:"mini_community"`
 }
 
 type CommnunityFollow struct {

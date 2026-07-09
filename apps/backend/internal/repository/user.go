@@ -77,7 +77,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 	return &userItem, nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, payload *user.UpdateUserPayload) (*user.User, error) {
 	stmt := `
@@ -142,7 +142,7 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, paylo
 	return &updatedUser, nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *UserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*user.User, error) {
 	stmt := `
@@ -171,9 +171,9 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*us
 	return &user, nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.ViewPost], error) {
+func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	stmt := `
 		SELECT p.*,
 		COALESCE(
@@ -214,14 +214,14 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 
 	orderStmt := ""
 
-	if payload.SortBy == nil || *payload.SortBy == model.SortByCreatedAt {
+	if payload.Sort == nil || *payload.Sort == model.SortByCreatedAt {
 		if payload.Order == nil || *payload.Order == model.OrderDesc {
 			orderStmt += " ORDER BY p.created_at DESC "
 		} else {
 			orderStmt += " ORDER BY p.created_at ASC "
 		}
-		if payload.NextCursor != nil {
-			cursorTime, err := time.Parse(time.RFC3339Nano, payload.NextCursor.SortValue)
+		if payload.CursorSortValue != nil {
+			cursorTime, err := time.Parse(time.RFC3339Nano, *payload.CursorSortValue)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse cursor sort value: %w", err)
 			}
@@ -245,13 +245,13 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 		} else {
 			orderStmt += " ORDER BY p.upvotes ASC, p.created_at DESC "
 		}
-		if payload.NextCursor != nil {
-			upvotes, err := strconv.Atoi(payload.NextCursor.SortValue)
+		if payload.CursorSortValue != nil {
+			upvotes, err := strconv.Atoi(*payload.CursorSortValue)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to convert sort value to int: %w", err)
 			}
 			args["cursor_sort_value"] = upvotes
-			args["cursor_created_at"] = payload.NextCursor.CreatedAt
+			args["cursor_created_at"] = payload.CursorCreatedAt
 			if *payload.Order == model.OrderDesc {
 				stmt += ` AND (
 					p.upvotes < @cursor_sort_value
@@ -282,14 +282,15 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 		return nil, fmt.Errorf("Failed to query get posts for user id %s: %w", userID, err)
 	}
 
-	posts, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.ViewPost])
+	posts, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.PopulatedPost])
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &model.CursorPaginatedResponse[post.ViewPost]{
-				Data:    []post.ViewPost{},
-				Cursor:  model.Cursor{},
-				HasMore: false,
+			return &model.CursorPaginatedResponse[post.PopulatedPost]{
+				Data:            []post.PopulatedPost{},
+				CursorSortValue: *payload.CursorSortValue,
+				CursorCreatedAt: *payload.CursorCreatedAt,
+				HasMore:         false,
 			}, nil
 		}
 
@@ -298,39 +299,37 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 
 	if len(posts) < limit+1 {
 		length := len(posts)
-		return &model.CursorPaginatedResponse[post.ViewPost]{
-			Data:    posts[:length],
-			Cursor:  model.Cursor{},
-			HasMore: false,
+		return &model.CursorPaginatedResponse[post.PopulatedPost]{
+			Data:            posts[:length],
+			CursorSortValue: *payload.CursorSortValue,
+			CursorCreatedAt: *payload.CursorCreatedAt,
+			HasMore:         false,
 		}, nil
 	}
-
-	NextCursor := model.Cursor{}
-	if payload.SortBy == nil || *payload.SortBy == model.SortByCreatedAt {
-		NextCursor = model.Cursor{
-			SortValue: posts[limit].CreatedAt.Format(time.RFC3339Nano),
-			CreatedAt: posts[limit].CreatedAt,
-		}
+	var nextCursorSortValue string
+	var nextCursorCreatedAt time.Time
+	if payload.Sort == nil || *payload.Sort == model.SortByCreatedAt {
+		nextCursorSortValue = posts[limit].CreatedAt.Format(time.RFC3339Nano)
+		nextCursorCreatedAt = posts[limit].CreatedAt
 	} else {
-		NextCursor = model.Cursor{
-			SortValue: strconv.Itoa(posts[limit].Upvotes),
-			CreatedAt: posts[limit].CreatedAt,
-		}
+		nextCursorSortValue = strconv.Itoa(posts[limit].Upvotes)
+		nextCursorCreatedAt = posts[limit].CreatedAt
 	}
 
 	HasMore := true
 
-	return &model.CursorPaginatedResponse[post.ViewPost]{
-		Data:    posts[:limit],
-		Cursor:  NextCursor,
-		HasMore: HasMore,
+	return &model.CursorPaginatedResponse[post.PopulatedPost]{
+		Data:            posts[:limit],
+		CursorSortValue: nextCursorSortValue,
+		CursorCreatedAt: nextCursorCreatedAt,
+		HasMore:         HasMore,
 	}, nil
 
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersPayload) (*model.CursorPaginatedResponse[user.MiniUser], error) {
+func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
 		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, u.created_at
@@ -356,20 +355,20 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersPay
 
 	orderStmt := ""
 
-	if payload.SortBy == nil || *payload.SortBy == model.SortByFollowerCount {
+	if payload.Sort == nil || *payload.Sort == model.SortByFollowerCount {
 		if payload.Order == nil || *payload.Order == model.OrderDesc {
 			orderStmt += " ORDER BY u.follower_count DESC, u.created_at DESC"
 		} else {
 			orderStmt += " ORDER BY u.follower_count ASC, u.created_at ASC"
 		}
 
-		if payload.NextCursor != nil {
-			cursorFollowerCount, err := strconv.Atoi(payload.NextCursor.SortValue)
+		if payload.CursorSortValue != nil {
+			cursorFollowerCount, err := strconv.Atoi(*payload.CursorSortValue)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to convert to int: %w", err)
 			}
 			args["cursor_follower_count"] = cursorFollowerCount
-			args["cursor_created_at"] = payload.NextCursor.CreatedAt
+			args["cursor_created_at"] = payload.CursorCreatedAt
 			if payload.Order == nil || *payload.Order == model.OrderDesc {
 				conditions = append(conditions, "((u.follower_count < @cursor_follower_count) OR (u.follower_count = @cursor_follower_count AND u.created_at <= @cursor_created_at))")
 
@@ -384,8 +383,8 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersPay
 			orderStmt += " ORDER BY u.created_at ASC"
 		}
 
-		if payload.NextCursor != nil {
-			args["cursor_created_at"] = payload.NextCursor.CreatedAt
+		if payload.CursorSortValue != nil {
+			args["cursor_created_at"] = payload.CursorCreatedAt
 			if payload.Order == nil || *payload.Order == model.OrderDesc {
 				conditions = append(conditions, "u.created_at <= @cursor_created_at")
 			} else {
@@ -394,7 +393,7 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersPay
 		}
 	}
 	if len(conditions) > 0 {
-		stmt += " WHERE " + strings.Join(conditions, " AND ") 
+		stmt += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	stmt += " " + orderStmt
@@ -418,37 +417,33 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersPay
 
 	if len(users) < limit+1 {
 		return &model.CursorPaginatedResponse[user.MiniUser]{
-			Data:    users,
-			Cursor:  model.Cursor{},
-			HasMore: false,
+			Data:            users,
+			CursorSortValue: *payload.CursorSortValue,
+			CursorCreatedAt: *payload.CursorCreatedAt,
+			HasMore:         false,
 		}, nil
 	}
 
-	if payload.SortBy == nil || *payload.SortBy == model.SortByFollowerCount {
-		nextCreatedAt := users[limit].CreatedAt
+	if payload.Sort == nil || *payload.Sort == model.SortByFollowerCount {
+		nextCursorCreatedAt := users[limit].CreatedAt
 		nextFollowerCount := strconv.Itoa(users[limit].FollowerCount)
 		return &model.CursorPaginatedResponse[user.MiniUser]{
-			Data: users[:limit],
-			Cursor: model.Cursor{
-				SortValue: nextFollowerCount,
-				CreatedAt: nextCreatedAt,
-			},
-			HasMore: true,
+			Data:            users[:limit],
+			CursorSortValue: nextFollowerCount,
+			CursorCreatedAt: nextCursorCreatedAt,
+			HasMore:         true,
 		}, nil
 	}
 
-	nextCreatedAt := users[limit].CreatedAt
+	nextCursorCreatedAt := users[limit].CreatedAt
 
 	return &model.CursorPaginatedResponse[user.MiniUser]{
-		Data: users[:limit],
-		Cursor: model.Cursor{
-			SortValue: nextCreatedAt.Format(time.RFC3339Nano),
-			CreatedAt: nextCreatedAt,
-		},
-		HasMore: true,
+		Data:            users[:limit],
+		CursorSortValue: nextCursorCreatedAt.Format(time.RFC3339Nano),
+		CursorCreatedAt: nextCursorCreatedAt,
+		HasMore:         true,
 	}, nil
 
 }
 
-//-------------------------------------------------------------------------------------------
-
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

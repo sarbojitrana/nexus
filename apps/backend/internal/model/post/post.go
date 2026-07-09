@@ -31,6 +31,7 @@ type Post struct {
 	Content      *string    `json:"content" db:"content"`
 	Upvotes      int        `json:"upvotes" db:"upvotes"`
 	Downvotes    int        `json:"downvotes" db:"downvotes"`
+	CommentCount int        `json:"commentCount" db:"comment_count"`
 	DeletedAt    *time.Time `json:"deletedAt" db:"deleted_at"`
 }
 
@@ -53,12 +54,6 @@ type PostVote struct {
 }
 
 type PopulatedPost struct {
-	Post
-	PostMedia []PostMedia `json:"postMedia" db:"post_media"`
-	Comments  []Post      `json:"comments" db:"comments"`
-}
-
-type ViewPost struct{
 	Post
 	PostMedia []PostMedia `json:"postMedia" db:"post_media"`
 }

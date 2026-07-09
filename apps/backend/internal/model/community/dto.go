@@ -1,12 +1,13 @@
 package community
 
 import (
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/sarbojitrana/nexus/internal/model"
 )
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreateCommunityPayload struct {
 	Name        string  `json:"name" validate:"required,max=50"`
@@ -30,7 +31,7 @@ func (p *CreateCommunityPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type UpdateCommunityPayload struct {
 	ID          uuid.UUID  `json:"id" validate:"required,uuid"`
@@ -50,7 +51,7 @@ func (p *UpdateCommunityPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeleteCommunityPayload struct {
 	ID uuid.UUID `json:"id" validate:"required,uuid"`
@@ -64,7 +65,7 @@ func (p *DeleteCommunityPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CommunityFollowPayload struct {
 	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
@@ -79,7 +80,7 @@ func (p *CommunityFollowPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeleteCommunityFollowPayload struct {
 	ID uuid.UUID `json:"id" validate:"required,uuid"`
@@ -93,7 +94,7 @@ func (p *DeleteCommunityFollowPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetCommunityByIDPayload struct {
 	ID uuid.UUID `json:"id" validate:"required,uuid"`
@@ -107,18 +108,19 @@ func (p *GetCommunityByIDPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetCommunitiesPayload struct {
-	Name             *string       `json:"name" validate:"omitempty,max=50"`
-	NextCursor       *model.Cursor `json:"nextCursor"`
-	SortBy           *string       `json:"sortBy" validate:"omitempty,oneof=created_at members_count posts_count"`
-	Order            *string       `json:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *string       `json:"dateCreatedStart"`
-	DateCreatedEnd   *string       `json:"dateCreatedEnd"`
+type GetCommunitiesQuery struct {
+	Name             *string    `query:"name" validate:"omitempty,max=50"`
+	CursorSortValue  *string    `query:"cursorSortValue"`
+	CursorCreatedAt  *time.Time `query:"cursorCreatedAt"`
+	Sort             *string    `query:"sort" validate:"omitempty,oneof=created_at members_count posts_count"`
+	Order            *string    `query:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *string    `query:"dateCreatedStart"`
+	DateCreatedEnd   *string    `query:"dateCreatedEnd"`
 }
 
-func (p *GetCommunitiesPayload) Validate() error {
+func (p *GetCommunitiesQuery) Validate() error {
 	validate := validator.New()
 	if err := validate.Struct(p); err != nil {
 		return err
@@ -129,9 +131,9 @@ func (p *GetCommunitiesPayload) Validate() error {
 		p.Name = &defaultName
 	}
 
-	if p.SortBy == nil {
+	if p.Sort == nil {
 		defaultSort := "members_count"
-		p.SortBy = &defaultSort
+		p.Sort = &defaultSort
 	}
 
 	if p.Order == nil {
@@ -141,7 +143,7 @@ func (p *GetCommunitiesPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ReportCommunityPostPayload struct {
 	ReporterID  uuid.UUID `json:"reporterId" validate:"required,uuid"`
@@ -155,7 +157,7 @@ func (p *ReportCommunityPostPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ResolveCommunityPostReportPayload struct {
 	ReportID     uuid.UUID             `json:"reportId" validate:"required,uuid"`
@@ -169,7 +171,7 @@ func (p *ResolveCommunityPostReportPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeleteCommunityPostPayload struct {
 	PostID      uuid.UUID `json:"postId" validate:"required,uuid"`
@@ -182,7 +184,7 @@ func (p *DeleteCommunityPostPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ChangeCommunityRolePayload struct {
 	UserID      uuid.UUID     `json:"userId" validate:"required,uuid"`
@@ -196,7 +198,7 @@ func (p *ChangeCommunityRolePayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type BanCommunityMemberPayload struct {
 	UserID      uuid.UUID `json:"userId" validate:"required,uuid"`
@@ -209,7 +211,7 @@ func (p *BanCommunityMemberPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type KickCommunityMemberPayload struct {
 	UserID      uuid.UUID `json:"userId" validate:"required,uuid"`
@@ -222,27 +224,27 @@ func (p *KickCommunityMemberPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetReportByIDPayload struct {
-	ReportID uuid.UUID `json:"reportId" validate:"required,uuid"`
+type GetReportByIDQuery struct {
+	ReportID uuid.UUID `query:"reportId" validate:"required,uuid"`
 }
 
-func (p *GetReportByIDPayload) Validate() error {
+func (p *GetReportByIDQuery) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetCommunityReportsPayload struct {
-	CommunityID       uuid.UUID              `json:"communityId" validate:"required,uuid"`
-	Status            *CommunityReportStatus `json:"statusId" validate:"omitempty,oneof=pending dismissed resolved"`
-	ReportedDateStart string                 `json:"reportedDateStart"`
-	ReportedDateEnd   string                 `json:"reportedDateEnd"`
+type GetCommunityReportsQuery struct {
+	CommunityID       uuid.UUID              `query:"communityId" validate:"required,uuid"`
+	Status            *CommunityReportStatus `query:"statusId" validate:"omitempty,oneof=pending dismissed resolved"`
+	ReportedDateStart string                 `query:"reportedDateStart"`
+	ReportedDateEnd   string                 `query:"reportedDateEnd"`
 }
 
-func (p *GetCommunityReportsPayload) Validate() error {
+func (p *GetCommunityReportsQuery) Validate() error {
 	validate := validator.New()
 	if err := validate.Struct(p); err != nil {
 		return err

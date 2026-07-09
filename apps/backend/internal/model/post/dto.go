@@ -8,10 +8,9 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreatePostPayload struct {
-	AuthorID     uuid.UUID  `json:"authorId" validate:"required,uuid"`
 	CommunityID  *uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
 	ParentPostID *uuid.UUID `json:"parentPostId" validate:"omitempty,uuid"`
 	PostType     *PostType  `json:"postType" validate:"oneof=comment post"`
@@ -24,7 +23,7 @@ func (p *CreatePostPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeletePostByIDPayload struct {
 	ID uuid.UUID `json:"id" validate:"required,uuid"`
@@ -35,12 +34,11 @@ func (p *DeletePostByIDPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type UpdatePostByIDPayload struct {
-	ID      uuid.UUID `json:"id" validate:"required,uuid"`
-	Title   *string   `json:"title"`
-	Content *string   `json:"content"`
+	Title   *string `json:"title"`
+	Content *string `json:"content"`
 }
 
 func (p *UpdatePostByIDPayload) Validate() error {
@@ -48,35 +46,30 @@ func (p *UpdatePostByIDPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetPostByIDPayload struct {
-	ID uuid.UUID
+type GetPostsQuery struct {
+	AuthorID         *uuid.UUID   `query:"authorId" validate:"omitempty,uuid"`
+	CommunityID      *uuid.UUID   `query:"communityId" validate:"omitempty,uuid"`
+	ParentPostID     *uuid.UUID   `query:"parentPostId" validate:"omitempty,uuid"`
+	CursorSortValue  *string      `query:"cursorSortValue"`
+	CursorCreatedAt  *time.Time   `query:"cursorCreatedAt"`
+	Sort             *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
+	Order            *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *time.Time   `query:"dateCreatedStart"`
+	DateCreatedEnd   *time.Time   `query:"dateCreatedEnd"`
 }
 
-//-------------------------------------------------------------------------------------------
-
-type GetPostsPayload struct {
-	AuthorID         *uuid.UUID    `json:"authorId" validate:"omitempty,uuid"`
-	CommunityID      *uuid.UUID    `json:"communityId" validate:"omitempty,uuid"`
-	ParentPostID     *uuid.UUID    `json:"parentPostId" validate:"omitempty,uuid"`
-	NextCursor       *model.Cursor `json:"nextCursor" validate:"omitempty"`
-	SortBy           *model.SortBy `json:"sortBy" validate:"omitempty,oneof=created_at upvotes"`
-	Order            *model.Order  `json:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *time.Time    `json:"dateCreatedStart"`
-	DateCreatedEnd   *time.Time    `json:"dateCreatedEnd"`
-}
-
-func (p *GetPostsPayload) Validate() error {
+func (p *GetPostsQuery) Validate() error {
 	validate := validator.New()
 
 	if err := validate.Struct(p); err != nil {
 		return err
 	}
 
-	if p.SortBy == nil {
+	if p.Sort == nil {
 		defaultSortBy := model.SortByCreatedAt
-		p.SortBy = &defaultSortBy
+		p.Sort = &defaultSortBy
 
 	}
 
@@ -87,7 +80,7 @@ func (p *GetPostsPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreatePostMediaPayload struct {
 	PostID     uuid.UUID `json:"postId" validate:"required,uuid"`
@@ -101,7 +94,7 @@ func (p *CreatePostMediaPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeletePostMediaPayload struct {
 	ID     uuid.UUID `json:"id" validate:"required,uuid"`
@@ -113,18 +106,18 @@ func (p *DeletePostMediaPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetPostMediaPayload struct {
-	PostID uuid.UUID `json:"postId" validate:"required,uuid"`
+type GetPostMediaQuery struct {
+	PostID uuid.UUID `query:"postId" validate:"required,uuid"`
 }
 
-func (p *GetPostMediaPayload) Validate() error {
+func (p *GetPostMediaQuery) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreatePostVotePayload struct {
 	PostID   uuid.UUID `json:"postId" validate:"required,uuid"`
@@ -136,7 +129,7 @@ func (p *CreatePostVotePayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeletePostVotePayload struct {
 	ID     uuid.UUID `json:"id" validate:"required,uuid"`
@@ -147,3 +140,44 @@ func (p *DeletePostVotePayload) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+type GetCommentsByPostIDQuery struct {
+	CursorSortValue  *string      `query:"cursorSortValue"`
+	CursorCreatedAt  *time.Time   `query:"cursorCreatedAt"`
+	Sort             *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
+	Order            *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *time.Time   `query:"dateCreatedStart" validate:"omitempty"`
+	DateCreatedEnd   *time.Time   `query:"dateCreatedEnd" validate:"omitempty"`
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+type GetRepliesByCommentIDQuery struct {
+	Page  *int `query:"page" validate:"omitempty,min=1"`
+	Limit *int `query:"limit" validate:"omitempty,min=1,max=100"`
+}
+
+func (q *GetRepliesByCommentIDQuery) Validate() error {
+
+	validate := validator.New()
+
+	if err := validate.Struct(q); err != nil {
+		return err
+	}
+
+	if q.Page == nil {
+		defaultPage := 1
+		q.Page = &defaultPage
+	}
+
+	if q.Limit == nil {
+		defaultLimit := 5
+		q.Limit = &defaultLimit
+	}
+
+	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

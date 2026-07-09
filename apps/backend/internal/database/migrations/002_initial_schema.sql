@@ -111,6 +111,7 @@ CREATE TABLE
         content TEXT,
         upvotes INT NOT NULL DEFAULT 0,
         downvotes INT NOT NULL DEFAULT 0,
+        comment_count INT NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMPTZ

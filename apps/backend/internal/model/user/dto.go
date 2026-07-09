@@ -8,7 +8,7 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreateUserPayload struct {
 	Username    string  `json:"username" validate:"required"`
@@ -25,7 +25,7 @@ func (p *CreateUserPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type UpdateUserPayload struct {
 	Username    *string `json:"username" validate:"omitempty,max=50"`
@@ -41,38 +41,39 @@ func (p *UpdateUserPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetUserByIDPayload struct {
-	ID uuid.UUID `json:"id" validate:"required,uuid"`
+type GetUserByIDQuery struct {
+	ID uuid.UUID `query:"id" validate:"required,uuid"`
 }
 
-func (p *GetUserByIDPayload) Validate() error {
+func (p *GetUserByIDQuery) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetUsersPayload struct {
-	NextCursor      *model.Cursor `json:"nextCursor" validate:"omitempty"`
-	SortBy          *model.SortBy `json:"sortBy" validate:"omitempty,oneof=created_at follower_count"`
-	Order           *model.Order  `json:"order" validate:"omitempty,oneof=asc desc"`
-	Name            *string       `json:"name" validate:"omitempty"`
-	DateJoinedStart *time.Time    `json:"dateJoinedStart" validate:"omitempty"`
-	DateJoinedEnd   *time.Time    `json:"dateJoinedEnd" validate:"omitempty"`
+type GetUsersQuery struct {
+	CursorSortValue *string      `json:"cursorSortValue"`
+	CursorCreatedAt *time.Time   `json:"cursorCreatedAt"`
+	Sort            *model.Sort  `json:"sort" validate:"omitempty,oneof=created_at follower_count"`
+	Order           *model.Order `json:"order" validate:"omitempty,oneof=asc desc"`
+	Name            *string      `json:"name" validate:"omitempty"`
+	DateJoinedStart *time.Time   `json:"dateJoinedStart" validate:"omitempty"`
+	DateJoinedEnd   *time.Time   `json:"dateJoinedEnd" validate:"omitempty"`
 }
 
-func (p *GetUsersPayload) Validate() error {
+func (p *GetUsersQuery) Validate() error {
 	validate := validator.New()
 
 	if err := validate.Struct(p); err != nil {
 		return err
 	}
 
-	if p.SortBy == nil {
+	if p.Sort == nil {
 		defaultSortBy := model.SortByFollowerCount
-		p.SortBy = &defaultSortBy
+		p.Sort = &defaultSortBy
 	}
 
 	if p.Order == nil {
@@ -88,14 +89,15 @@ func (p *GetUsersPayload) Validate() error {
 	return nil
 }
 
-//-------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetPostsByUserIDPayload struct {
-	NextCursor       *model.Cursor `json:"nextCursor" valdate:"omitempty"`
-	SortBy           *model.SortBy `json:"sortBy" validate:"omitempty,oneof=created_at upvotes"`
-	Order            *model.Order  `json:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *time.Time    `json:"dateCreatedStart"`
-	DateCreatedEnd   *time.Time    `json:"dateCreatedEnd"`
+	CursorSortValue  *string      `query:"cursorSortValue"`
+	CursorCreatedAt  *time.Time   `query:"cursorCreatedAt"`
+	Sort             *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
+	Order            *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart *time.Time   `query:"dateCreatedStart"`
+	DateCreatedEnd   *time.Time   `query:"dateCreatedEnd"`
 }
 
 func (p *GetPostsByUserIDPayload) Validate() error {
@@ -105,9 +107,9 @@ func (p *GetPostsByUserIDPayload) Validate() error {
 		return err
 	}
 
-	if p.SortBy == nil {
+	if p.Sort == nil {
 		defaultSortBy := model.SortByCreatedAt
-		p.SortBy = &defaultSortBy
+		p.Sort = &defaultSortBy
 	}
 
 	if p.Order == nil {
