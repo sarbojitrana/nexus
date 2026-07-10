@@ -2,15 +2,16 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/sarbojitrana/nexus/internal/model"
 	"github.com/sarbojitrana/nexus/internal/model/community"
 	"github.com/sarbojitrana/nexus/internal/model/post"
-	"github.com/sarbojitrana/nexus/internal/model/user"
 	"github.com/sarbojitrana/nexus/internal/server"
 )
 
@@ -187,9 +188,9 @@ func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, c
 		)
 		WHERE community_id = @community_id AND AND user_id = @user_id 
 	`
-	var communityMember community.CommunityMember 
+	var communityMember community.CommunityMember
 	err = r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
-		"role" : payload.NewRole,
+		"role": payload.NewRole,
 	}).Scan(&communityMember)
 
 	if err != nil {
@@ -249,33 +250,165 @@ func (r *PostRepository) GetCommunityPostByID(ctx context.Context, postID uuid.U
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-func (r *PostRepository) GetCommunityMembers(ctx context.Context, communityID uuid.UUID) (*model.CursorPaginatedResponse[user.MiniUser], error) {
+func (r *PostRepository) GetCommunityMembers(ctx context.Context, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
 	stmt := `
-		SELECT
+		SELECT cm.*,
+		COALESCE(
+			json_agg(
+				to_jsonb(camel(u))
+				ORDER BY
+					created_at DESC,
+					id DESC
+			), FILTER(
+				WHERE id IS NOT NULL
+			),
+			'[]' :: JSONB
+		) AS users
+
+		FROM community_members cm
+		LEFT JOIN users u ON cm.user_id = u.id
+		WHERE cm.community_id = @community_id
+
 	`
 
-	row, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
-		"post_id":      postID,
-		"community_id": communityID,
-	})
+	limit := 20
 
-	if err != nil {
-		return nil, fmt.Errorf("Failed to process get post by id query for post_id %s: %w", postID, err)
+	args := pgx.NamedArgs{
+		"community_id":   communityID,
+		"limit_plus_one": limit + 1,
 	}
 
-	post, err := pgx.CollectExactlyOneRow(row, pgx.RowToStructByName[post.PopulatedPost])
+	orderStmt := ""
 
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse the row to the struct: %w", err)
+	if *query.Order == model.OrderDesc {
+		orderStmt = "ORDER BY joined_at DESC"
+		if query.CursorSortValue != nil {
+			stmt += " AND joined_at <= @joined_at "
+			args["joined_at"] = query.CursorSortValue
+		}
+
+	} else {
+		orderStmt += "ORDER BY joined_at ASC"
+		if query.CursorSortValue != nil {
+			stmt += " AND joined_at >= @joined_at "
+			args["joined_at"] = query.CursorSortValue
+		}
 	}
 
-	return &post, nil
+	stmt += orderStmt + " LIMIT @limit_plus_one"
 
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to process get community members of community with comunity_id %s: %w", communityID, err)
+	}
+
+	communityMembers, err := pgx.CollectRows(rows, pgx.RowToStructByName[community.MiniCommunityUser])
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &model.CursorPaginatedResponse[community.MiniCommunityUser]{
+				Data:            []community.MiniCommunityUser{},
+				CursorSortValue: *query.CursorSortValue,
+				CursorCreatedAt: *query.CursorCreatedAt,
+				HasMore:         false,
+			}, nil
+		}
+		return nil, fmt.Errorf("Failed to parse the rows to the struct: %w", err)
+	}
+
+	if len(communityMembers) < limit+1 {
+		length := len(communityMembers)
+		return &model.CursorPaginatedResponse[community.MiniCommunityUser]{
+			Data:            communityMembers[:length],
+			CursorSortValue: *query.CursorSortValue,
+			CursorCreatedAt: *query.CursorCreatedAt,
+			HasMore:         false,
+		}, nil
+	}
+
+	nextCursorSortValue := communityMembers[limit].JoinedAt.Format(time.RFC3339Nano)
+	nextCursorCreatedAt := communityMembers[limit].JoinedAt
+
+	return &model.CursorPaginatedResponse[community.MiniCommunityUser]{
+		Data:            communityMembers[:limit],
+		CursorSortValue: nextCursorSortValue,
+		CursorCreatedAt: nextCursorCreatedAt,
+		HasMore:         true,
+	}, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+func (r *CommunityRepository) ReportCommunityPost(ctx context.Context, userID uuid.UUID, payload *community.ReportCommunityPostPayload) (*community.CommunityReport, error) {
+	stmt := `
+		INSERT INTO
+		community_reports(
+			reporter_id,
+			community_id,
+			post_id,
+			reason,
+			status
+		)
+		VALUES(
+			@reporter_id,
+			@community_id,
+			@post_id,
+			@reason,
+			@status
+		)
+		RETURNING
+		*
+	`
+	var communityReport community.CommunityReport
+	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"reporter_id":  userID,
+		"community_id": payload.CommunityID,
+		"post_id":      payload.PostID,
+		"reason":       payload.Reason,
+		"status":       community.ReportPending,
+	}).Scan(&communityReport)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create a report: %w", err)
+	}
+	return &communityReport, nil
+}
+
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.ResolveCommunityPostReportPayload) (*community.CommunityReport, error){
+	check, err := r.IsModerator(ctx, communityID, userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if the user was the moderator/admin for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+
+	if *check == false {
+		return nil, fmt.Errorf("The user with user_id %s is not the moderator/admin of the community", userID)
+	}
+
+	stmt := `
+		UPDATE community_reports SET
+		status = @updated_status
+		WHERE id = @report_id
+		RETURNING *
+	`
+	var report community.CommunityReport
+	err = r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"report_id" : payload.ReportID,
+		"updated_status" : payload.UpdatedStatus,
+	}).Scan(&report)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to update the report with report_id %s: %w", payload.ReportID, err)
+	}
+
+	return &report, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *CommunityRepository) IsModerator(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*bool, error) {
 	stmt := `

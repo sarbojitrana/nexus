@@ -20,6 +20,7 @@ type CommunityRole string
 const (
 	MemberRole CommunityRole = "member"
 	AdminRole  CommunityRole = "admin"
+	CommonRole CommunityRole = "all"
 )
 
 type CommunityReportStatus string
@@ -80,4 +81,12 @@ type CommunityReport struct {
 	PostID       uuid.UUID             `json:"postId" db:"post_id"`
 	Reason       string                `json:"reason" db:"reason"`
 	Status       CommunityReportStatus `json:"status" db:"status"`
+}
+
+type MiniCommunityUser struct {
+	UserID    uuid.UUID     `json:"userId" db:"user_id"`
+	AvatarKey string        `json:"avatarKey" db:"avatar_key"`
+	Name      string        `json:"name" db:"name"`
+	JoinedAt  time.Time     `json:"joinedAt" db:"joined_at"`
+	Role      CommunityRole `json:"role" db:"role"`
 }

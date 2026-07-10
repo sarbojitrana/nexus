@@ -147,27 +147,27 @@ func (p *GetCommunitiesQuery) Validate() error {
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type GetCommunityMembersPayload struct {
-	CursorSortValue *string      `query:"cursorSortValue"`
-	CursorCreatedAt *time.Time   `query:"cursorCreatedAt"`
-	Sort            *model.Sort  `query:"sort" validate:"omitempty, oneof=joined_at role"`
-	Order           *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+type GetCommunityMembersQuery struct {
+	CursorSortValue *string        `query:"cursorSortValue"`
+	CursorCreatedAt *time.Time     `query:"cursorCreatedAt"`
+	Order           *model.Order   `query:"order" validate:"omitempty,oneof=asc desc"`
+	Role            *CommunityRole `query:"role" validate:"oneof= all moderator member"`
 }
 
-func (p *GetCommunityMembersPayload) Validate() error {
+func (p *GetCommunityMembersQuery) Validate() error {
 	validate := validator.New()
-	if err := validate.Struct(p) ; err != nil{
+	if err := validate.Struct(p); err != nil {
 		return err
-	}
-
-	if p.Sort == nil {
-		defaultSort := model.SortByRole
-		p.Sort = &defaultSort
 	}
 
 	if p.Order == nil {
 		defaultOrder := model.OrderAsc
 		p.Order = &defaultOrder
+	}
+
+	if p.Role == nil {
+		defaultRole := CommonRole
+		p.Role = &defaultRole
 	}
 
 	return nil
@@ -176,7 +176,6 @@ func (p *GetCommunityMembersPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ReportCommunityPostPayload struct {
-	ReporterID  uuid.UUID `json:"reporterId" validate:"required,uuid"`
 	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
 	PostID      uuid.UUID `json:"postId" validate:"required,uuid"`
 	Reason      string    `json:"reason" validate:"required,max=1000"`
@@ -190,10 +189,8 @@ func (p *ReportCommunityPostPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ResolveCommunityPostReportPayload struct {
-	ReportID     uuid.UUID             `json:"reportId" validate:"required,uuid"`
-	ReportStatus CommunityReportStatus `json:"reportStatus" validate:"required,oneof=dismissed resolved pending"`
-	CommunityID  uuid.UUID             `json:"communityId" validate:"required,uuid"`
-	ModeratorID  uuid.UUID             `json:"moderatorId" validate:"required,uuid"`
+	ReportID      uuid.UUID             `json:"reportId" validate:"required,uuid"`
+	UpdatedStatus CommunityReportStatus `json:"updatedStatus" validate:"required, oneof= resolved dismissed"`
 }
 
 func (p *ResolveCommunityPostReportPayload) Validate() error {
