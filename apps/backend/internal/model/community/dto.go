@@ -5,16 +5,19 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/sarbojitrana/nexus/internal/model"
 )
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreateCommunityPayload struct {
-	Name        string  `json:"name" validate:"required,max=50"`
-	Slug        string  `json:"slug" validate:"required,max=50"`
-	Description *string `json:"description" validate:"omitempty,max=1000"`
-	AvatarKey   *string `json:"avatarKey"`
-	BannerKey   *string `json:"bannerKey"`
+	AdminID     uuid.UUID       `json:"adminId" validate:"required,uuid"`
+	Name        string          `json:"name" validate:"required,max=50"`
+	Slug        string          `json:"slug" validate:"required,max=50"`
+	Description *string         `json:"description" validate:"omitempty,max=1000"`
+	AvatarKey   *string         `json:"avatarKey"`
+	BannerKey   *string         `json:"bannerKey"`
+	CanPost     *PostPermission `json:"canPost"`
 }
 
 func (p *CreateCommunityPayload) Validate() error {
@@ -22,28 +25,26 @@ func (p *CreateCommunityPayload) Validate() error {
 	if err := validate.Struct(p); err != nil {
 		return err
 	}
-
-	if p.Description == nil {
-		defaultDescription := ""
-		p.Description = &defaultDescription
+	if p.CanPost == nil {
+		defaultCanPost := AllPost
+		p.CanPost = &defaultCanPost
 	}
-
 	return nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type UpdateCommunityPayload struct {
-	ID          uuid.UUID  `json:"id" validate:"required,uuid"`
-	AdminID     *uuid.UUID `json:"adminId" validate:"required,uuid"`
-	Name        *string    `json:"name" validate:"omitempty,max=50"`
-	Slug        *string    `json:"slug" validate:"omitempty,max=50"`
-	Description *string    `json:"description" validate:"omitempty,max=1000"`
-	AvatarKey   *string    `json:"avatarKey"`
-	BannerKey   *string    `json:"bannerKey"`
+type UpdateCommunitySettingsPayload struct {
+	UserID      uuid.UUID `jso:"userId" validate:"required,uuid"`
+	Name        *string   `json:"name" validate:"omitempty,max=50"`
+	Slug        *string   `json:"slug" validate:"omitempty,max=50"`
+	Description *string   `json:"description" validate:"omitempty,max=1000"`
+	AvatarKey   *string   `json:"avatarKey"`
+	BannerKey   *string   `json:"bannerKey"`
+	CanPost     *string   `json:"canPost"`
 }
 
-func (p *UpdateCommunityPayload) Validate() error {
+func (p *UpdateCommunitySettingsPayload) Validate() error {
 	validate := validator.New()
 	if err := validate.Struct(p); err != nil {
 		return err
@@ -53,11 +54,12 @@ func (p *UpdateCommunityPayload) Validate() error {
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type DeleteCommunityPayload struct {
-	ID uuid.UUID `json:"id" validate:"required,uuid"`
+type ChangeMemberRoleInCommunityPayload struct {
+	MemberUserID uuid.UUID     `json:"memberUserId" validate:"required,uuid"`
+	NewRole      CommunityRole `json:"newRole" validate:"required,max=50"`
 }
 
-func (p *DeleteCommunityPayload) Validate() error {
+func (p *ChangeMemberRoleInCommunityPayload) Validate() error {
 	validate := validator.New()
 	if err := validate.Struct(p); err != nil {
 		return err
@@ -140,6 +142,34 @@ func (p *GetCommunitiesQuery) Validate() error {
 		defaultOrder := "desc"
 		p.Order = &defaultOrder
 	}
+	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+type GetCommunityMembersPayload struct {
+	CursorSortValue *string      `query:"cursorSortValue"`
+	CursorCreatedAt *time.Time   `query:"cursorCreatedAt"`
+	Sort            *model.Sort  `query:"sort" validate:"omitempty, oneof=joined_at role"`
+	Order           *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+}
+
+func (p *GetCommunityMembersPayload) Validate() error {
+	validate := validator.New()
+	if err := validate.Struct(p) ; err != nil{
+		return err
+	}
+
+	if p.Sort == nil {
+		defaultSort := model.SortByRole
+		p.Sort = &defaultSort
+	}
+
+	if p.Order == nil {
+		defaultOrder := model.OrderAsc
+		p.Order = &defaultOrder
+	}
+
 	return nil
 }
 

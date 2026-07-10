@@ -9,13 +9,15 @@ import (
 type Sort string
 
 const (
-	SortByCreatedAt Sort = "created_at"
-	SortByUpvotes         Sort = "upvotes"
-	SortByFollowerCount   Sort = "follower_count"
-	SortByFollowingCount  Sort = "following_count"
-	SortByMembersCount    Sort = "members_count"
-	SortByPostsCount      Sort = "posts_count"
-	SortByPopularity      Sort = "popularity"
+	SortByCreatedAt      Sort = "created_at"
+	SortByUpvotes        Sort = "upvotes"
+	SortByFollowerCount  Sort = "follower_count"
+	SortByFollowingCount Sort = "following_count"
+	SortByMembersCount   Sort = "members_count"
+	SortByPostsCount     Sort = "posts_count"
+	SortByPopularity     Sort = "popularity"
+	SortByJoinedAt       Sort = "joined_at"
+	SortByRole           Sort = "role"
 )
 
 type Order string
@@ -52,8 +54,8 @@ type OffsetPaginatedResponse[T any] struct {
 }
 
 type CursorPaginatedResponse[T any] struct {
-	Data            []T        `json:"data"`
+	Data            []T       `json:"data"`
 	CursorSortValue string    `json:"cursorSortValue"`
 	CursorCreatedAt time.Time `json:"createdAt"`
-	HasMore         bool       `json:"hasMore"`
+	HasMore         bool      `json:"hasMore"`
 }

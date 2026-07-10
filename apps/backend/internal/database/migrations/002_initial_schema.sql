@@ -45,6 +45,7 @@ CREATE TABLE
         banner_key TEXT,
         members_count INT NOT NULL DEFAULT 0,
         posts_count INT NOT NULL DEFAULT 0,
+        can_post TEXT DEFAULT 'all',
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );

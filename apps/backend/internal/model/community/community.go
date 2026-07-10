@@ -8,6 +8,13 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model/post"
 )
 
+type PostPermission string
+
+const (
+	AllPost        PostPermission = "all"
+	ModeratorsOnly PostPermission = "moderator"
+)
+
 type CommunityRole string
 
 const (
