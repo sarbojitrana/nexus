@@ -414,7 +414,158 @@ func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, commentID uu
 		Total:      total,
 		TotalPages: (total + *query.Limit - 1) / *query.Limit,
 	}, nil
-
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *PostRepository) ReactToPost( ctx context.Context, userID uuid.UUID, postID uuid.UUID, payload *post.ReactToPostPayload ) error {
+	tx, err := r.server.DB.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	reaction, err := r.getReaction(ctx, userID, postID)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case reaction == nil:
+		_, err = tx.Exec(ctx, `
+			INSERT INTO post_votes(post_id, user_id, vote_type)
+			VALUES (@post_id, @user_id, @vote_type)
+		`, pgx.NamedArgs{
+			"post_id":   postID,
+			"user_id":   userID,
+			"vote_type": payload.Reaction,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create reaction: %w", err)
+		}
+
+		if payload.Reaction == post.Upvote {
+			_, err = tx.Exec(ctx,
+				`UPDATE posts SET upvotes = upvotes + 1 WHERE id = @post_id`,
+				pgx.NamedArgs{"post_id": postID},
+			)
+		} else {
+			_, err = tx.Exec(ctx,
+				`UPDATE posts SET downvotes = downvotes + 1 WHERE id = @post_id`,
+				pgx.NamedArgs{"post_id": postID},
+			)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to update vote count: %w", err)
+		}
+
+	case *reaction == payload.Reaction:
+		_, err = tx.Exec(ctx, `
+			DELETE FROM post_votes
+			WHERE post_id = @post_id
+			AND user_id = @user_id
+		`, pgx.NamedArgs{
+			"post_id": postID,
+			"user_id": userID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to remove reaction: %w", err)
+		}
+
+		if payload.Reaction == post.Upvote {
+			_, err = tx.Exec(ctx,
+				`UPDATE posts SET upvotes = upvotes - 1 WHERE id = @post_id`,
+				pgx.NamedArgs{"post_id": postID},
+			)
+		} else {
+			_, err = tx.Exec(ctx,
+				`UPDATE posts SET downvotes = downvotes - 1 WHERE id = @post_id`,
+				pgx.NamedArgs{"post_id": postID},
+			)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to update vote count: %w", err)
+		}
+
+	default:
+		_, err = tx.Exec(ctx, `
+			UPDATE post_votes
+			SET vote_type = @vote_type
+			WHERE post_id = @post_id
+			AND user_id = @user_id
+		`, pgx.NamedArgs{
+			"post_id":   postID,
+			"user_id":   userID,
+			"vote_type": payload.Reaction,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to update reaction: %w", err)
+		}
+
+		if *reaction == post.Upvote {
+			_, err = tx.Exec(ctx, `
+				UPDATE posts
+				SET upvotes = upvotes - 1,
+				    downvotes = downvotes + 1
+				WHERE id = @post_id
+			`, pgx.NamedArgs{
+				"post_id": postID,
+			})
+		} else {
+			_, err = tx.Exec(ctx, `
+				UPDATE posts
+				SET upvotes = upvotes + 1,
+				    downvotes = downvotes - 1
+				WHERE id = @post_id
+			`, pgx.NamedArgs{
+				"post_id": postID,
+			})
+		}
+		if err != nil {
+			return fmt.Errorf("failed to update vote counts: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *PostRepository) getReaction( ctx context.Context, userID uuid.UUID, postID uuid.UUID) (*post.VoteType, error) {
+
+	stmt := `
+		SELECT vote_type
+		FROM post_votes
+		WHERE post_id = @post_id
+		AND user_id = @user_id
+	`
+
+	var voteType post.VoteType
+
+	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"post_id": postID,
+		"user_id": userID,
+	}).Scan(&voteType)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf(
+			"failed to get reaction for user_id %s and post_id %s: %w",
+			userID,
+			postID,
+			err,
+		)
+	}
+
+	return &voteType, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+

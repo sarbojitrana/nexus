@@ -49,15 +49,17 @@ func (p *UpdatePostByIDPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetPostsQuery struct {
-	AuthorID         *uuid.UUID   `query:"authorId" validate:"omitempty,uuid"`
-	CommunityID      *uuid.UUID   `query:"communityId" validate:"omitempty,uuid"`
-	ParentPostID     *uuid.UUID   `query:"parentPostId" validate:"omitempty,uuid"`
-	CursorSortValue  *string      `query:"cursorSortValue"`
-	CursorCreatedAt  *time.Time   `query:"cursorCreatedAt"`
-	Sort             *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
-	Order            *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *time.Time   `query:"dateCreatedStart"`
-	DateCreatedEnd   *time.Time   `query:"dateCreatedEnd"`
+	AuthorID                   *uuid.UUID   `query:"authorId" validate:"omitempty,uuid"`
+	CommunityID                *uuid.UUID   `query:"communityId" validate:"omitempty,uuid"`
+	ParentPostID               *uuid.UUID   `query:"parentPostId" validate:"omitempty,uuid"`
+	NextTrendingPostValue      int64        `query:"nextTrendingPostValue"`
+	NextTrendingPostCreatedAt  time.Time    `query:"nextTrendingPostCreatedAt"`
+	NextFollowingPostValue     int64        `query:"nextFollowingPostValue"`
+	NextFollowingPostCreatedAt time.Time    `query:"nextFollowingPostCreatedAt"`
+	Sort                       *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
+	Order                      *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+	DateCreatedStart           *time.Time   `query:"dateCreatedStart"`
+	DateCreatedEnd             *time.Time   `query:"dateCreatedEnd"`
 }
 
 func (p *GetPostsQuery) Validate() error {
@@ -178,6 +180,17 @@ func (q *GetRepliesByCommentIDQuery) Validate() error {
 	}
 
 	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+type ReactToPostPayload struct {
+	Reaction VoteType `json:"reaction" validate:"required, oneof= upvote downvote"`
+}
+
+func (p *ReactToPostPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

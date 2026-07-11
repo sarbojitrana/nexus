@@ -24,15 +24,15 @@ UPDATE ON users FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
 
 CREATE TABLE
     user_follows (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         follower_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
         following_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
+        PRIMARY KEY (follower_id, following_id),
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT self_follow_check CHECK (follower_id <> following_id)
     );
+CREATE INDEX idx_user_follows_follower_id ON user_follows (follower_id);
+CREATE INDEX idx_user_follows_following_id ON user_follows (following_id);
 
-CREATE TRIGGER set_updated_at_user_follows BEFORE
-UPDATE ON user_follows FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
 
 CREATE TABLE
     communities (
@@ -59,14 +59,14 @@ UPDATE ON communities FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
 
 CREATE TABLE
     community_follows (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         follower_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
         community_id UUID NOT NULL REFERENCES communities ON DELETE CASCADE,
+        PRIMARY KEY (follower_id, community_id),
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
-CREATE TRIGGER set_updated_at_community_follows BEFORE
-UPDATE ON communtiy_follows FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
+CREATE INDEX idx_community_follows_follower_id ON user_follows (follower_id);
+CREATE INDEX idx_community_follows_community_id ON user_follows (community_id);
 
 CREATE TABLE
     community_members (
@@ -140,7 +140,7 @@ CREATE TABLE
         post_id UUID NOT NULL REFERENCES posts ON DELETE CASCADE,
         user_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
         PRIMARY KEY (post_id, user_id),
-        vote_type SMALLINT NOT NULL,
+        vote_type TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );

@@ -83,6 +83,13 @@ type CommunityReport struct {
 	Status       CommunityReportStatus `json:"status" db:"status"`
 }
 
+type BannedFromCommunityUser struct {
+	CommnunityID uuid.UUID     `json:"communityId" db:"community_id"`
+	UserID       uuid.UUID     `json:"userId" db:"user_id"`
+	Duration     time.Duration `json:"duration" db:"duration"`
+	model.BaseWithCreatedAt
+}
+
 type MiniCommunityUser struct {
 	UserID    uuid.UUID     `json:"userId" db:"user_id"`
 	AvatarKey string        `json:"avatarKey" db:"avatar_key"`

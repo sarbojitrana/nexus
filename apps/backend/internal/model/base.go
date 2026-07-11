@@ -56,6 +56,6 @@ type OffsetPaginatedResponse[T any] struct {
 type CursorPaginatedResponse[T any] struct {
 	Data            []T       `json:"data"`
 	CursorSortValue string    `json:"cursorSortValue"`
-	CursorCreatedAt time.Time `json:"createdAt"`
+	CursorCreatedAt time.Time `json:"cursorCreatedAt"`
 	HasMore         bool      `json:"hasMore"`
 }

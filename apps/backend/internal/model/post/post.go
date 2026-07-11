@@ -14,11 +14,11 @@ const (
 	PostTypePost    PostType = "post"
 )
 
-type VoteType int16
+type VoteType string
 
 const (
-	Upvote   VoteType = 1
-	DownVote VoteType = -1
+	Upvote   VoteType = "upvote"
+	DownVote VoteType = "downvote"
 )
 
 type Post struct {

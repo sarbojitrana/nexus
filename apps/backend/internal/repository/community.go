@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/sarbojitrana/nexus/internal/errs"
 	"github.com/sarbojitrana/nexus/internal/model"
 	"github.com/sarbojitrana/nexus/internal/model/community"
 	"github.com/sarbojitrana/nexus/internal/model/post"
@@ -198,12 +199,27 @@ func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, c
 	}
 
 	return &communityMember, nil
-
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetCommunityPostByID(ctx context.Context, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
+func (r *PostRepository) GetCommunityPostByID(ctx context.Context, userID uuid.UUID, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
+	
+	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
+
+	if err != nil{
+		return nil, fmt.Errorf("Could Not check if the user was banned by the community: %w",err)
+	}
+
+	if *isUserBanned == true {
+		code := "USER IS BANNED FROM COMMUNITY"
+		return nil, errs.NewBadRequestError{
+			"user is banned",
+			false,
+			&code,
+		}
+	}
+
 	stmt := `
 		SELECT p.* , 
 		COALESCE(
@@ -250,7 +266,23 @@ func (r *PostRepository) GetCommunityPostByID(ctx context.Context, postID uuid.U
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetCommunityMembers(ctx context.Context, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
+func (r *PostRepository) GetCommunityMembers(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
+		
+	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
+
+	if err != nil{
+		return nil, fmt.Errorf("Could Not check if the user was banned by the community: %w",err)
+	}
+
+	if *isUserBanned == true {
+		code := "USER IS BANNED FROM COMMUNITY"
+		return nil, errs.NewBadRequestError{
+			"user is banned",
+			false,
+			&code,
+		}
+	}	
+
 	stmt := `
 		SELECT cm.*,
 		COALESCE(
@@ -406,6 +438,276 @@ func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, us
 	}
 
 	return &report, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.DeleteCommunityPostPayload) error {
+	check, err := r.IsModerator(ctx, communityID, userID)
+
+	if err != nil {
+		return fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+
+	if *check == false {
+		return fmt.Errorf("The user with user_id %s is not a moderator/admin of the community", userID)
+	}
+
+	stmt := `
+		DELETE FROM posts
+		WHERE id = @post_id
+		AND community_id = @community_id
+	`
+	result, err := r.server.DB.Pool.Exec(ctx, stmt, pgx.NamedArgs{
+		"post_id":      payload.PostID,
+		"community_id": communityID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("Failed to delete the post with post_id %s: %w", payload.PostID, err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("Post with post_id %s not found or does not belong to community_id %s", payload.PostID, communityID)
+	}
+
+	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) BanUserFromCommunity( ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.BanCommunityMemberPayload ) (*community.BannedFromCommunityUser, error) {
+	check, err := r.IsModerator(ctx, communityID, userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+
+	if *check == false {
+		return nil,fmt.Errorf("The user with user_id %s is not a moderator/admin of the community", userID)
+	}
+
+	stmt := `
+		INSERT INTO banned_from_community_users (
+			community_id,
+			user_id,
+			duration
+		)
+		VALUES (
+			@community_id,
+			@user_id_to_ban,
+			@duration
+		)
+		RETURNING *
+	`
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+		"community_id":   communityID,
+		"user_id_to_ban": payload.UserIDToBan,
+		"duration":       payload.Duration,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to ban user %s from community %s by user %s: %w",
+			payload.UserIDToBan,
+			communityID,
+			userID,
+			err,
+		)
+	}
+
+	ban, err := pgx.CollectExactlyOneRow(
+		rows,
+		pgx.RowToStructByName[community.BannedFromCommunityUser],
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to parse banned user for community %s: %w",
+			communityID,
+			err,
+		)
+	}
+
+	return &ban, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) GetCommunityReports( ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityReportsQuery) (*model.CursorPaginatedResponse[community.CommunityReport], error) {
+
+	check, err := r.IsModerator(ctx, communityID, userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+
+	if *check == false {
+		return nil, fmt.Errorf("The user with user_id %s is not a moderator/admin of the community", userID)
+	}
+
+	stmt := `
+		SELECT *
+		FROM community_reports
+		WHERE community_id = @community_id
+	`
+	limit := 20
+
+	args := pgx.NamedArgs{
+		"community_id": communityID,
+		"limit_plus_one": limit + 1,
+	}
+
+	conditions := []string{}
+
+	if query.Status != nil {
+		args["status"] = *query.Status
+		conditions = append(conditions, "status = @status")
+	}
+
+	if query.ReportedDateStart != "" {
+		start, err := time.Parse(time.RFC3339Nano, query.ReportedDateStart)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse reported date start: %w", err)
+		}
+		args["reported_date_start"] = start
+		conditions = append(conditions, "created_at >= @reported_date_start")
+	}
+
+	if query.ReportedDateEnd != "" {
+		end, err := time.Parse(time.RFC3339Nano, query.ReportedDateEnd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse reported date end: %w", err)
+		}
+		args["reported_date_end"] = end
+		conditions = append(conditions, "created_at <= @reported_date_end")
+	}
+
+	if len(conditions) > 0 {
+		stmt += " AND " + strings.Join(conditions, " AND ")
+	}
+
+	stmt += `
+		ORDER BY created_at DESC
+		LIMIT @limit_plus_one
+	`
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to query community reports for community_id %s: %w",
+			communityID,
+			err,
+		)
+	}
+
+	reports, err := pgx.CollectRows(rows, pgx.RowToStructByName[community.CommunityReport])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &model.CursorPaginatedResponse[community.CommunityReport]{
+				Data:             []community.CommunityReport{},
+				CursorSortValue:  "",
+				CursorCreatedAt:  time.Time{},
+				HasMore:          false,
+			}, nil
+		}
+
+		return nil, fmt.Errorf(
+			"failed to collect community reports for community_id %s: %w",
+			communityID,
+			err,
+		)
+	}
+
+	if len(reports) < limit + 1 {
+		return &model.CursorPaginatedResponse[community.CommunityReport]{
+			Data:             reports,
+			CursorSortValue:  "",
+			CursorCreatedAt:  time.Time{},
+			HasMore:          false,
+		}, nil
+	}
+
+	return &model.CursorPaginatedResponse[community.CommunityReport]{
+		Data: reports[:limit],
+		CursorSortValue: reports[limit].CreatedAt.Format(time.RFC3339Nano),
+		CursorCreatedAt: reports[limit].CreatedAt,
+		HasMore: true,
+	}, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) GetReportByID( ctx context.Context, userID uuid.UUID, communityID uuid.UUID, reportID uuid.UUID ) (*community.CommunityReport, error) {
+
+	stmt := `
+		SELECT *
+		FROM community_reports
+		WHERE id = @report_id
+		AND community_id = @community_id
+	`
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+		"report_id":    reportID,
+		"community_id": communityID,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to query report_id %s in community_id %s: %w",
+			reportID,
+			communityID,
+			err,
+		)
+	}
+
+	report, err := pgx.CollectExactlyOneRow(
+		rows,
+		pgx.RowToStructByName[community.CommunityReport],
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to parse report_id %s: %w",
+			reportID,
+			err,
+		)
+	}
+
+	return &report, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) IsBannedFromCommunity( ctx context.Context, userID uuid.UUID, communityID uuid.UUID,) (*bool, error) {
+
+	stmt := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM banned_from_community_users
+			WHERE community_id = @community_id
+			AND user_id = @user_id
+		)
+	`
+
+	var banned bool
+
+	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"community_id": communityID,
+		"user_id":      userID,
+	}).Scan(&banned)
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to check if user %s is banned from community %s: %w",
+			userID,
+			communityID,
+			err,
+		)
+	}
+
+	return &banned, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

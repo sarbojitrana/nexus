@@ -201,9 +201,7 @@ func (p *ResolveCommunityPostReportPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeleteCommunityPostPayload struct {
-	PostID      uuid.UUID `json:"postId" validate:"required,uuid"`
-	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
-	ModeratorID uuid.UUID `json:"moderatorId" validate:"required,uuid"`
+	PostID uuid.UUID `json:"postId" validate:"required,uuid"`
 }
 
 func (p *DeleteCommunityPostPayload) Validate() error {
@@ -213,24 +211,9 @@ func (p *DeleteCommunityPostPayload) Validate() error {
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type ChangeCommunityRolePayload struct {
-	UserID      uuid.UUID     `json:"userId" validate:"required,uuid"`
-	Role        CommunityRole `json:"role" validate:"required,oneof=admin moderator member"`
-	CommunityID uuid.UUID     `json:"communityId" validate:"required,uuid"`
-	ModeratorID uuid.UUID     `json:"moderatorId" validate:"required,uuid"`
-}
-
-func (p *ChangeCommunityRolePayload) Validate() error {
-	validate := validator.New()
-	return validate.Struct(p)
-}
-
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 type BanCommunityMemberPayload struct {
-	UserID      uuid.UUID `json:"userId" validate:"required,uuid"`
-	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
-	ModeratorID uuid.UUID `json:"moderatorId" validate:"required,uuid"`
+	UserIDToBan uuid.UUID     `json:"userIdToBan" validate:"required,uuid"`
+	Duration    time.Duration `json:"duration" validate:"required"`
 }
 
 func (p *BanCommunityMemberPayload) Validate() error {
@@ -238,29 +221,6 @@ func (p *BanCommunityMemberPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-type KickCommunityMemberPayload struct {
-	UserID      uuid.UUID `json:"userId" validate:"required,uuid"`
-	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
-	ModeratorID uuid.UUID `json:"moderatorId" validate:"required,uuid"`
-}
-
-func (p *KickCommunityMemberPayload) Validate() error {
-	validate := validator.New()
-	return validate.Struct(p)
-}
-
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-type GetReportByIDQuery struct {
-	ReportID uuid.UUID `query:"reportId" validate:"required,uuid"`
-}
-
-func (p *GetReportByIDQuery) Validate() error {
-	validate := validator.New()
-	return validate.Struct(p)
-}
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

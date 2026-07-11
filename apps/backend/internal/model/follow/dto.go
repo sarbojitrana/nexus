@@ -7,23 +7,46 @@ import (
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type CreateFollowPayload struct {
-	FollowerID  uuid.UUID `json:"followerId" validate:"required,uuid"`
-	FollowingID uuid.UUID `json:"followingId" required:"required,uuid"`
+type FollowCommunityPayload struct {
+	CommunityID  uuid.UUID `json:"communityId" validate:"required,uuid"`
 }
 
-func (p *CreateFollowPayload) Validate() error {
+func (p *FollowCommunityPayload) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-type DeleteFollowPayload struct {
+type UnFollowCommunityPayload struct {
 	ID uuid.UUID `json:"id" validate:"required,uuid"`
 }
 
-func (p *DeleteFollowPayload) Validate() error {
+func (p *UnFollowCommunityPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+type FollowUserPayload struct {
+	FollowingID  uuid.UUID `json:"followingId" validate:"required,uuid"`
+}
+
+
+func (p *FollowUserPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+type UnFollowUserPayload struct {
+	FollowingID  uuid.UUID `json:"followingId" validate:"required,uuid"`
+}
+
+
+func (p *UnFollowUserPayload) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }

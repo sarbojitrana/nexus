@@ -447,3 +447,28 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQue
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *UserRepository) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	stmt := `
+		DELETE FROM users
+		WHERE
+			id = @user_id
+	`
+	result, err := r.server.DB.Pool.Exec(ctx, stmt, pgx.NamedArgs{
+		"user_id": userID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		code := "USER NOT FOUND"
+		return errs.NewNotFoundError("user not found", false, &code)
+	}
+
+	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
