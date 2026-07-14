@@ -190,7 +190,7 @@ func (p *ReportCommunityPostPayload) Validate() error {
 
 type ResolveCommunityPostReportPayload struct {
 	ReportID      uuid.UUID             `json:"reportId" validate:"required,uuid"`
-	UpdatedStatus CommunityReportStatus `json:"updatedStatus" validate:"required, oneof= resolved dismissed"`
+	UpdatedStatus CommunityReportStatus `json:"updatedStatus" validate:"required,oneof= resolved dismissed"`
 }
 
 func (p *ResolveCommunityPostReportPayload) Validate() error {
@@ -220,7 +220,6 @@ func (p *BanCommunityMemberPayload) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
-
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

@@ -49,37 +49,40 @@ func (p *UpdatePostByIDPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetPostsQuery struct {
-	AuthorID                   *uuid.UUID   `query:"authorId" validate:"omitempty,uuid"`
-	CommunityID                *uuid.UUID   `query:"communityId" validate:"omitempty,uuid"`
-	ParentPostID               *uuid.UUID   `query:"parentPostId" validate:"omitempty,uuid"`
-	NextTrendingPostValue      int64        `query:"nextTrendingPostValue"`
-	NextTrendingPostCreatedAt  time.Time    `query:"nextTrendingPostCreatedAt"`
-	NextFollowingPostValue     int64        `query:"nextFollowingPostValue"`
-	NextFollowingPostCreatedAt time.Time    `query:"nextFollowingPostCreatedAt"`
-	Sort                       *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
-	Order                      *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart           *time.Time   `query:"dateCreatedStart"`
-	DateCreatedEnd             *time.Time   `query:"dateCreatedEnd"`
+	ReferenceTime             *time.Time `query:"referenceTime"`
+	TrendingLimit             *int       `query:"trendingLimit"`
+	FollowingUsersLimit       *int       `query:"followingUsersLimit"`
+	FollowingCommunitiesLimit *int       `query:"followingCommunitiesLimit"`
+
+	TrendingCursorValue                 *float64   `query:"trendingCursorValue"`
+	TrendingCursorCreatedAt             *time.Time `query:"trendingCursorCreatedAt"`
+
+	FollowingUsersCursorCreatedAt       *time.Time `query:"followingUsersCursorCreatedAt"`
+	FollowingCommunitiesCursorCreatedAt *time.Time `query:"followingCommunitiesCursorCreatedAt"`
 }
 
 func (p *GetPostsQuery) Validate() error {
 	validate := validator.New()
+	return validate.Struct(p)
+}
 
-	if err := validate.Struct(p); err != nil {
-		return err
-	}
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-	if p.Sort == nil {
-		defaultSortBy := model.SortByCreatedAt
-		p.Sort = &defaultSortBy
+type GetPostsQueryResponse struct {
+	ReferenceTime                           time.Time       `json:"referenceTime"`
+	
+	TrendingPosts                           []PopulatedPost `json:"trendingPosts"`
+	NextTrendingCursorValue                 *float64        `json:"nextTrendingCursorValue"`
+	NextTrendingCursorCreatedAt             *time.Time      `json:"nextTrendingCursorCreatedAt"`
+	HasMoreTrending                         bool            `json:"hasMoreTrending"`
 
-	}
+	FollowingUsersPosts                     []PopulatedPost `json:"followingUsersPosts"`
+	NextFollowingUsersCursorCreatedAt       *time.Time      `json:"nextFollowingUsersCursorCreatedAt"`
+	HasMoreFollowingUsers                   bool            `json:"hasMoreFollowingUsers"`
 
-	if p.Order == nil {
-		defaultOrder := model.OrderDesc
-		p.Order = &defaultOrder
-	}
-	return nil
+	FollowingCommunitiesPosts               []PopulatedPost `json:"followingCommunitiesPosts"`
+	NextFollowingCommunitiesCursorCreatedAt *time.Time      `json:"nextFollowingCommunitiesCursorCreatedAt"`
+	HasMoreFollowingCommunities             bool            `json:"hasMoreFollowingCommunities"`
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -123,7 +126,7 @@ func (p *GetPostMediaQuery) Validate() error {
 
 type CreatePostVotePayload struct {
 	PostID   uuid.UUID `json:"postId" validate:"required,uuid"`
-	VoteType VoteType  `json:"voteType" validate:"required,oneof=-1 1"`
+	VoteType VoteType  `json:"voteType" validate:"required,oneof=upvote downvote"`
 }
 
 func (p *CreatePostVotePayload) Validate() error {
@@ -185,7 +188,7 @@ func (q *GetRepliesByCommentIDQuery) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ReactToPostPayload struct {
-	Reaction VoteType `json:"reaction" validate:"required, oneof= upvote downvote"`
+	Reaction VoteType `json:"reaction" validate:"required,oneof=upvote downvote"`
 }
 
 func (p *ReactToPostPayload) Validate() error {

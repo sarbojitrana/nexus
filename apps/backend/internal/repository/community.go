@@ -203,7 +203,7 @@ func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, c
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetCommunityPostByID(ctx context.Context, userID uuid.UUID, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
+func (r *CommunityRepository) GetCommunityPostByID(ctx context.Context, userID uuid.UUID, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
 	
 	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
 
@@ -213,11 +213,13 @@ func (r *PostRepository) GetCommunityPostByID(ctx context.Context, userID uuid.U
 
 	if *isUserBanned == true {
 		code := "USER IS BANNED FROM COMMUNITY"
-		return nil, errs.NewBadRequestError{
+		return nil, errs.NewBadRequestError(
 			"user is banned",
 			false,
 			&code,
-		}
+			nil,
+			nil,
+		)
 	}
 
 	stmt := `
@@ -266,7 +268,7 @@ func (r *PostRepository) GetCommunityPostByID(ctx context.Context, userID uuid.U
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetCommunityMembers(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
+func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
 		
 	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
 
@@ -276,11 +278,13 @@ func (r *PostRepository) GetCommunityMembers(ctx context.Context, userID uuid.UU
 
 	if *isUserBanned == true {
 		code := "USER IS BANNED FROM COMMUNITY"
-		return nil, errs.NewBadRequestError{
+		return nil, errs.NewBadRequestError(
 			"user is banned",
 			false,
 			&code,
-		}
+			nil,
+			nil,
+		)
 	}	
 
 	stmt := `
@@ -406,7 +410,6 @@ func (r *CommunityRepository) ReportCommunityPost(ctx context.Context, userID uu
 	}
 	return &communityReport, nil
 }
-
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

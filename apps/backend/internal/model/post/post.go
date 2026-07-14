@@ -23,16 +23,18 @@ const (
 
 type Post struct {
 	model.Base
-	AuthorID     uuid.UUID  `json:"authorId" db:"author_id"`
-	CommunityID  *uuid.UUID `json:"communityId" db:"community_id"`
-	ParentPostID *uuid.UUID `json:"parentPostId" db:"parent_post_id"`
-	PostType     PostType   `json:"postType" db:"post_type"`
-	Title        *string    `json:"title" db:"title"`
-	Content      *string    `json:"content" db:"content"`
-	Upvotes      int        `json:"upvotes" db:"upvotes"`
-	Downvotes    int        `json:"downvotes" db:"downvotes"`
-	CommentCount int        `json:"commentCount" db:"comment_count"`
-	DeletedAt    *time.Time `json:"deletedAt" db:"deleted_at"`
+	AuthorID            uuid.UUID  `json:"authorId" db:"author_id"`
+	CommunityID         *uuid.UUID `json:"communityId" db:"community_id"`
+	ParentPostID        *uuid.UUID `json:"parentPostId" db:"parent_post_id"`
+	PostType            PostType   `json:"postType" db:"post_type"`
+	Title               *string    `json:"title" db:"title"`
+	Content             *string    `json:"content" db:"content"`
+	Upvotes             int        `json:"upvotes" db:"upvotes"`
+	Downvotes           int        `json:"downvotes" db:"downvotes"`
+	CommentCount        int        `json:"commentCount" db:"comment_count"`
+	Engagement          int        `json:"engagement" db:"engagement"`
+	IsPopularityUpdated bool       `json:"isPopularityUpdated" db:"is_popularity_updated"`
+	DeletedAt           *time.Time `json:"deletedAt" db:"deleted_at"`
 }
 
 type PostMedia struct {
@@ -56,4 +58,10 @@ type PostVote struct {
 type PopulatedPost struct {
 	Post
 	PostMedia []PostMedia `json:"postMedia" db:"post_media"`
+}
+
+
+type ScoredPost struct{
+	DecayedScore 		float64 	`json:"decayedScore" db:"decayed_score"`
+	PopulatedPost		
 }

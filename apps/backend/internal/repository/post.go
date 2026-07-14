@@ -300,10 +300,10 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &model.CursorPaginatedResponse[post.PopulatedPost]{
-				Data:    []post.PopulatedPost{},
+				Data:            []post.PopulatedPost{},
 				CursorSortValue: *payload.CursorSortValue,
 				CursorCreatedAt: *payload.CursorCreatedAt,
-				HasMore: false,
+				HasMore:         false,
 			}, nil
 		}
 
@@ -314,10 +314,10 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 	if len(comments) < limit+1 {
 		length := len(comments)
 		return &model.CursorPaginatedResponse[post.PopulatedPost]{
-			Data:    comments[:length],
+			Data:            comments[:length],
 			CursorSortValue: *payload.CursorSortValue,
 			CursorCreatedAt: *payload.CursorCreatedAt,
-			HasMore: false,
+			HasMore:         false,
 		}, nil
 	}
 
@@ -335,10 +335,10 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 	HasMore := true
 
 	return &model.CursorPaginatedResponse[post.PopulatedPost]{
-		Data:    comments[:limit],
+		Data:            comments[:limit],
 		CursorSortValue: nextCursorSortValue,
 		CursorCreatedAt: nextCursorCreatedAt,
-		HasMore: HasMore,
+		HasMore:         HasMore,
 	}, nil
 }
 
@@ -418,7 +418,7 @@ func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, commentID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) ReactToPost( ctx context.Context, userID uuid.UUID, postID uuid.UUID, payload *post.ReactToPostPayload ) error {
+func (r *PostRepository) ReactToPost(ctx context.Context, userID uuid.UUID, postID uuid.UUID, payload *post.ReactToPostPayload) error {
 	tx, err := r.server.DB.Pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -533,9 +533,7 @@ func (r *PostRepository) ReactToPost( ctx context.Context, userID uuid.UUID, pos
 	return nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-func (r *PostRepository) getReaction( ctx context.Context, userID uuid.UUID, postID uuid.UUID) (*post.VoteType, error) {
+func (r *PostRepository) getReaction(ctx context.Context, userID uuid.UUID, postID uuid.UUID) (*post.VoteType, error) {
 
 	stmt := `
 		SELECT vote_type
@@ -569,3 +567,261 @@ func (r *PostRepository) getReaction( ctx context.Context, userID uuid.UUID, pos
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+func (r *PostRepository) GetPosts(ctx context.Context, userID *uuid.UUID, payload *post.GetPostsQuery) (*post.GetPostsQueryResponse, error) {
+
+	referenceTime := time.Now()
+	if payload.ReferenceTime != nil {
+		referenceTime = *payload.ReferenceTime
+	}
+	windowStart := referenceTime.AddDate(0, 0, -10)
+
+	trendingLimit := derefOrDefault(payload.TrendingLimit, 8)
+	followingUsersLimit := derefOrDefault(payload.FollowingUsersLimit, 4)
+	followingCommunitiesLimit := derefOrDefault(payload.FollowingCommunitiesLimit, 4)
+
+	resp := &post.GetPostsQueryResponse{ReferenceTime: referenceTime}
+
+	if trendingLimit > 0 {
+		posts, hasMore, nextVal, nextCreatedAt, err := r.fetchTrendingLane(
+			ctx, userID, referenceTime, windowStart, trendingLimit,
+			payload.TrendingCursorValue, payload.TrendingCursorCreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch trending posts: %w", err)
+		}
+		resp.TrendingPosts = posts
+		resp.HasMoreTrending = hasMore
+		resp.NextTrendingCursorValue = nextVal
+		resp.NextTrendingCursorCreatedAt = nextCreatedAt
+	}
+
+	if userID == nil {
+		return resp, nil
+	}
+
+	if followingUsersLimit > 0 {
+		filter := `
+			AND p.author_id IN (
+				SELECT followee_id FROM user_follows WHERE follower_id = @user_id
+			)
+		`
+		posts, hasMore, nextCreatedAt, err := r.fetchFollowingLane(
+			ctx, userID, windowStart, referenceTime, followingUsersLimit,
+			filter, payload.FollowingUsersCursorCreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch following-users posts: %w", err)
+		}
+		resp.FollowingUsersPosts = posts
+		resp.HasMoreFollowingUsers = hasMore
+		resp.NextFollowingUsersCursorCreatedAt = nextCreatedAt
+	}
+
+	if followingCommunitiesLimit > 0 {
+		filter := `
+			AND p.community_id IN (
+				SELECT community_id FROM community_follows WHERE user_id = @user_id
+			)
+		`
+		posts, hasMore, nextCreatedAt, err := r.fetchFollowingLane(
+			ctx, userID, windowStart, referenceTime, followingCommunitiesLimit,
+			filter, payload.FollowingCommunitiesCursorCreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch following-communities posts: %w", err)
+		}
+		resp.FollowingCommunitiesPosts = posts
+		resp.HasMoreFollowingCommunities = hasMore
+		resp.NextFollowingCommunitiesCursorCreatedAt = nextCreatedAt
+	}
+
+	return resp, nil
+}
+
+func (r *PostRepository) fetchTrendingLane(ctx context.Context, userID *uuid.UUID, referenceTime time.Time, windowStart time.Time, limit int, cursorValue *float64, cursorCreatedAt *time.Time) ([]post.PopulatedPost, bool, *float64, *time.Time, error) {
+
+	args := pgx.NamedArgs{
+		"reference_time": referenceTime,
+		"window_start":   windowStart,
+		"limit_plus_one": limit + 1,
+	}
+
+	banBlockFilter := ""
+	if userID != nil {
+		args["user_id"] = *userID
+		banBlockFilter = `
+			AND (p.community_id IS NULL OR NOT EXISTS (
+				SELECT 1 FROM banned_from_community_users b
+				WHERE b.community_id = p.community_id AND b.user_id = @user_id
+			))
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE ub.blocker_id = @user_id AND ub.blocked_id = p.author_id
+			)
+		`
+	}
+
+	cursorFilter := ""
+	if cursorValue != nil && cursorCreatedAt != nil {
+		args["cursor_value"] = *cursorValue
+		args["cursor_created_at"] = *cursorCreatedAt
+		cursorFilter = `
+			AND (
+				(p.engagement::float8 / POWER(EXTRACT(EPOCH FROM (@reference_time::timestamptz - p.created_at))/3600 + 2, 1.5)),
+				p.created_at
+			) < (@cursor_value, @cursor_created_at)
+		`
+	}
+
+	stmt := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT
+				p.id,
+				p.created_at,
+				(p.engagement::float8 / POWER(EXTRACT(EPOCH FROM (@reference_time::timestamptz - p.created_at))/3600 + 2, 1.5)) AS decayed_score
+			FROM posts p
+			WHERE p.deleted_at IS NULL
+				AND p.post_type = 'post'
+				AND p.created_at >= @window_start
+				AND p.created_at <= @reference_time
+				%s
+				%s
+			ORDER BY decayed_score DESC, p.created_at DESC
+			LIMIT @limit_plus_one
+		)
+		SELECT
+			p.*,
+			r.decayed_score,
+			COALESCE(
+				json_agg(
+					to_jsonb(camel(pm))
+					ORDER BY pm.created_at DESC, pm.id DESC
+				) FILTER (WHERE pm.id IS NOT NULL),
+				'[]'::jsonb
+			) AS post_media
+		FROM ranked r
+		JOIN posts p ON p.id = r.id
+		LEFT JOIN post_media pm ON pm.post_id = p.id
+		GROUP BY p.id, r.decayed_score, r.created_at
+		ORDER BY r.decayed_score DESC, r.created_at DESC
+	`, banBlockFilter, cursorFilter)
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	if err != nil {
+		return nil, false, nil, nil, fmt.Errorf("failed to query trending lane: %w", err)
+	}
+
+	scored, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.ScoredPost])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []post.PopulatedPost{}, false, nil, nil, nil
+		}
+		return nil, false, nil, nil, fmt.Errorf("failed to parse trending lane rows: %w", err)
+	}
+
+	hasMore := len(scored) > limit
+	if hasMore {
+		scored = scored[:limit]
+	}
+
+	posts := make([]post.PopulatedPost, len(scored))
+	for i, s := range scored {
+		posts[i] = s.PopulatedPost
+	}
+
+	var nextVal *float64
+	var nextCreatedAt *time.Time
+	if hasMore && len(scored) > 0 {
+		last := scored[len(scored)-1]
+		v := last.DecayedScore
+		c := last.CreatedAt
+		nextVal = &v
+		nextCreatedAt = &c
+	}
+
+	return posts, hasMore, nextVal, nextCreatedAt, nil
+}
+
+func (r *PostRepository) fetchFollowingLane(ctx context.Context, userID *uuid.UUID, windowStart time.Time, referenceTime time.Time, limit int, extraFilterSQL string, cursorCreatedAt *time.Time) ([]post.PopulatedPost, bool, *time.Time, error) {
+
+	args := pgx.NamedArgs{
+		"user_id":        *userID,
+		"window_start":   windowStart,
+		"reference_time": referenceTime,
+		"limit_plus_one": limit + 1,
+	}
+
+	banBlockFilter := `
+		AND (p.community_id IS NULL OR NOT EXISTS (
+			SELECT 1 FROM banned_from_community_users b
+			WHERE b.community_id = p.community_id AND b.user_id = @user_id
+		))
+		AND NOT EXISTS (
+			SELECT 1 FROM user_blocks ub
+			WHERE ub.blocker_id = @user_id AND ub.blocked_id = p.author_id
+		)
+	`
+
+	cursorFilter := ""
+	if cursorCreatedAt != nil {
+		args["cursor_created_at"] = *cursorCreatedAt
+		cursorFilter = "AND p.created_at < @cursor_created_at"
+	}
+
+	stmt := fmt.Sprintf(`
+		SELECT
+			p.*,
+			COALESCE(
+				json_agg(
+					to_jsonb(camel(pm))
+					ORDER BY pm.created_at DESC, pm.id DESC
+				) FILTER (WHERE pm.id IS NOT NULL),
+				'[]'::jsonb
+			) AS post_media
+		FROM posts p
+		LEFT JOIN post_media pm ON pm.post_id = p.id
+		WHERE p.deleted_at IS NULL
+			AND p.post_type = 'post'
+			AND p.created_at >= @window_start
+			AND p.created_at <= @reference_time
+			%s
+			%s
+			%s
+		GROUP BY p.id
+		ORDER BY p.created_at DESC
+		LIMIT @limit_plus_one
+	`, extraFilterSQL, banBlockFilter, cursorFilter)
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	if err != nil {
+		return nil, false, nil, fmt.Errorf("failed to query following lane: %w", err)
+	}
+
+	posts, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.PopulatedPost])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []post.PopulatedPost{}, false, nil, nil
+		}
+		return nil, false, nil, fmt.Errorf("failed to parse following lane rows: %w", err)
+	}
+
+	hasMore := len(posts) > limit
+	if hasMore {
+		posts = posts[:limit]
+	}
+
+	var nextCreatedAt *time.Time
+	if hasMore && len(posts) > 0 {
+		c := posts[len(posts)-1].CreatedAt
+		nextCreatedAt = &c
+	}
+
+	return posts, hasMore, nextCreatedAt, nil
+}
+
+func derefOrDefault(p *int, def int) int {
+	if p == nil {
+		return def
+	}
+	return *p
+}
