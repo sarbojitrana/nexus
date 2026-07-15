@@ -145,7 +145,7 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, paylo
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *uuid.UUID, userID uuid.UUID) (*user.User, error) {
-	
+
 	stmt := `SELECT * FROM users u WHERE u.id = @user_id`
 	args := pgx.NamedArgs{"user_id": userID}
 
@@ -527,4 +527,26 @@ func (r *UserRepository) GetUserByClerkID(ctx context.Context, clerkID string) (
 		return nil, fmt.Errorf("failed to scan user by clerk_id %s: %w", clerkID, err)
 	}
 	return &u, nil
+}
+
+func (r *UserRepository) IsUserBlocked(ctx context.Context, userID uuid.UUID, blockerID uuid.UUID) (*bool, error) {
+
+	stmt := `
+		SELECT EXISTS(
+			SELECT 1 FROM user_blocks
+			WHERE (blocker_id = @user_id AND blocked_id = @blocker_id)
+			OR (blocker_id = @blocker_id AND blocked_id = @user_id)
+		)
+	`
+	var blocked bool
+	err := r.server.DB.Pool.QueryRow(ctx,stmt , pgx.NamedArgs{
+		"user_id": userID,
+		"blocker_id": blockerID,
+		}).Scan(&blocked)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check block status: %w", err)
+	}
+
+	return &blocked, nil
+
 }

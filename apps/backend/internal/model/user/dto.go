@@ -120,3 +120,4 @@ func (p *GetPostsByUserIDPayload) Validate() error {
 
 	return nil
 }
+

@@ -883,3 +883,98 @@ func (r *CommunityRepository) GetCommunities(ctx context.Context, query *communi
 	}, nil
 
 }
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) JoinCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID) (*community.CommunityMember, error) {
+
+	banned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check ban status for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+	if *banned {
+		code := "USER_IS_BANNED"
+		return nil, errs.NewBadRequestError("user is banned from this community", false, &code, nil, nil)
+	}
+
+	isMember, err := r.IsMember(ctx, communityID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check membership for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+	if *isMember {
+		code := "ALREADY_MEMBER"
+		return nil, errs.NewBadRequestError("already a member of this community", false, &code, nil, nil)
+	}
+
+	tx, err := r.server.DB.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, `
+		INSERT INTO community_members (user_id, community_id, role)
+		VALUES (@user_id, @community_id, @role)
+		RETURNING *
+	`, pgx.NamedArgs{
+		"user_id":      userID,
+		"community_id": communityID,
+		"role":         community.MemberRole,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to join community %s for user_id %s: %w", communityID, userID, err)
+	}
+	member, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.CommunityMember])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse new community member: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO community_follows (follower_id, community_id)
+		VALUES (@follower_id, @community_id)
+		ON CONFLICT (follower_id, community_id) DO NOTHING
+	`, pgx.NamedArgs{
+		"follower_id":  userID,
+		"community_id": communityID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default follow on join: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return &member, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) LeaveCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID) error {
+
+	isAdmin, err := r.IsAdmin(ctx, communityID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to check admin status for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+	if *isAdmin {
+		code := "ADMIN_CANNOT_LEAVE"
+		return errs.NewBadRequestError("admin must transfer ownership before leaving the community", false, &code, nil, nil)
+	}
+
+	result, err := r.server.DB.Pool.Exec(ctx, `
+		DELETE FROM community_members
+		WHERE user_id = @user_id AND community_id = @community_id
+	`, pgx.NamedArgs{
+		"user_id":      userID,
+		"community_id": communityID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to leave community %s for user_id %s: %w", communityID, userID, err)
+	}
+	if result.RowsAffected() == 0 {
+		code := "NOT_A_MEMBER"
+		return errs.NewNotFoundError("not a member of this community", false, &code)
+	}
+	return nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
