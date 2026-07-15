@@ -29,8 +29,8 @@ CREATE TABLE
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
-CREATE INDEX idx_community_follows_follower_id ON user_follows (follower_id);
-CREATE INDEX idx_community_follows_community_id ON user_follows (community_id);
+CREATE INDEX idx_community_follows_follower_id ON community_follows (follower_id);
+CREATE INDEX idx_community_follows_community_id ON community_follows (community_id);
 
 CREATE TABLE
     community_members (
@@ -75,3 +75,18 @@ CREATE TABLE banned_from_community_users (
 
 CREATE INDEX banned_from_community_users_user_id ON banned_from_community_users(user_id);
 CREATE INDEX banned_from_community_users_community_id ON banned_from_community_users(community_id);
+
+CREATE OR REPLACE FUNCTION sync_community_members_count() RETURNS TRIGGER AS $$
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		UPDATE communities SET members_count = members_count + 1 WHERE id = NEW.community_id;
+	ELSIF TG_OP = 'DELETE' THEN
+		UPDATE communities SET members_count = members_count - 1 WHERE id = OLD.community_id;
+	END IF;
+	RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_community_members_count
+AFTER INSERT OR DELETE ON community_members
+FOR EACH ROW EXECUTE FUNCTION sync_community_members_count();

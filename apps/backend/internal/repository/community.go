@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,12 @@ func NewCommunityRepository(server *server.Server) *CommunityRepository {
 }
 
 func (r *CommunityRepository) CreateCommunity(ctx context.Context, payload *community.CreateCommunityPayload) (*community.Community, error) {
+	tx, err := r.server.DB.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	stmt := `
 		INSERT INTO communities(
 			admin_id,
@@ -34,8 +41,7 @@ func (r *CommunityRepository) CreateCommunity(ctx context.Context, payload *comm
 			slug,
 			description,
 			avatar_key,
-			banner_key,
-			can_post
+			banner_key
 		)
 		VALUES(
 			@admin_id,
@@ -43,34 +49,43 @@ func (r *CommunityRepository) CreateCommunity(ctx context.Context, payload *comm
 			@slug,
 			@description,
 			@avatar_key,
-			@banner_key,
-			@can_post
+			@banner_key
 		)
-		RETURNING
-		*
+		RETURNING *
 	`
-
-	row, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+	row, err := tx.Query(ctx, stmt, pgx.NamedArgs{
 		"admin_id":    payload.AdminID,
 		"name":        payload.Name,
 		"slug":        payload.Slug,
 		"description": payload.Description,
-		"avatar_key":  *payload.AvatarKey,
-		"banner_key":  *payload.BannerKey,
-		"can_post":    *payload.CanPost,
+		"avatar_key":  payload.AvatarKey,
+		"banner_key":  payload.BannerKey,
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create community: %w", err)
 	}
-
-	community, err := pgx.CollectExactlyOneRow(row, pgx.RowToStructByName[community.Community])
-
+	newCommunity, err := pgx.CollectExactlyOneRow(row, pgx.RowToStructByName[community.Community])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse the row to struct: %w", err)
 	}
 
-	return &community, nil
+	_, err = tx.Exec(ctx, `
+		INSERT INTO community_members(user_id, community_id, role)
+		VALUES(@user_id, @community_id, @role)
+		`,
+		pgx.NamedArgs{
+			"user_id":      payload.AdminID,
+			"community_id": newCommunity.ID,
+			"role":         community.AdminRole,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to add admin as community member: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return &newCommunity, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -120,25 +135,22 @@ func (r *CommunityRepository) UpdateCommunitySettings(ctx context.Context, commu
 		setClauses = append(setClauses, "banner_key = @banner_key")
 	}
 
-	if payload.CanPost != nil {
-		args["can_post"] = *payload.CanPost
-		setClauses = append(setClauses, "can_post = @can_post")
-	}
-
 	if len(setClauses) == 0 {
-		return nil, fmt.Errorf("No fields provided to update for community_id %s: %w", communityID, err)
+		code := "NOTHING_TO_UPDATE"
+		return nil, errs.NewBadRequestError("No fields provided to update", false, &code, nil, nil)
 	}
 
-	stmt += " " + strings.Join(setClauses, " AND ") + " WHERE community_id = @community_id"
-
-	var community community.Community
-	err = r.server.DB.Pool.QueryRow(ctx, stmt, args).Scan(&community)
-
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update the community settings for community_id %s: %w", communityID, err)
-
 	}
-	return &community, nil
+
+	updated, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.Community])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse updated community for community_id %s: %w", communityID, err)
+	}
+
+	return &updated, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -160,7 +172,8 @@ func (r *CommunityRepository) DeleteCommunity(ctx context.Context, communityID u
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("community not found")
+		code := "COMMUNITY_NOT_FOUND"
+		return errs.NewNotFoundError("community not found", false, &code)
 	}
 
 	return nil
@@ -171,31 +184,37 @@ func (r *CommunityRepository) DeleteCommunity(ctx context.Context, communityID u
 func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, communityID uuid.UUID, userID uuid.UUID, payload *community.ChangeMemberRoleInCommunityPayload) (*community.CommunityMember, error) {
 
 	check, err := r.IsAdmin(ctx, communityID, userID)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to check if the user was the admin for user_id %s and community_id %s: %w", userID, communityID, err)
 	}
+	if !*check {
+		code := "NOT_ADMIN"
+		return nil, errs.NewBadRequestError("The user is not the admin of the community", false, &code, nil, nil)
+	}
 
-	if *check == false {
-		return nil, fmt.Errorf("The user with user_id %s is not the admin of the community", userID)
+	if payload.TargetUserID == userID {
+		code := "CANNOT_CHANGE_OWN_ROLE"
+		return nil, errs.NewBadRequestError("cannot change your own role", false, &code, nil, nil)
 	}
 
 	stmt := `
-		UPDATE community_members SET(
-			role
-		)
-		VALUES(
-			@role
-		)
-		WHERE community_id = @community_id AND AND user_id = @user_id 
+		UPDATE community_members
+		SET role = @role
+		WHERE community_id = @community_id AND user_id = @target_user_id
+		RETURNING *
 	`
-	var communityMember community.CommunityMember
-	err = r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
-		"role": payload.NewRole,
-	}).Scan(&communityMember)
-
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+		"role":           payload.NewRole,
+		"community_id":   communityID,
+		"target_user_id": payload.TargetUserID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update the role of the member: %w", err)
+	}
+
+	communityMember, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.CommunityMember])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse updated member: %w", err)
 	}
 
 	return &communityMember, nil
@@ -204,161 +223,139 @@ func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, c
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *CommunityRepository) GetCommunityPostByID(ctx context.Context, userID uuid.UUID, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
-	
+
 	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
-
-	if err != nil{
-		return nil, fmt.Errorf("Could Not check if the user was banned by the community: %w",err)
+	if err != nil {
+		return nil, fmt.Errorf("Could Not check if the user was banned by the community: %w", err)
 	}
-
-	if *isUserBanned == true {
-		code := "USER IS BANNED FROM COMMUNITY"
-		return nil, errs.NewBadRequestError(
-			"user is banned",
-			false,
-			&code,
-			nil,
-			nil,
-		)
+	if *isUserBanned {
+		code := "USER_IS_BANNED"
+		return nil, errs.NewBadRequestError("user is banned", false, &code, nil, nil)
 	}
 
 	stmt := `
-		SELECT p.* , 
+		SELECT p.*,
 		COALESCE(
 			json_agg(
 				to_jsonb(camel(pm))
-				ORDER BY
-					pm.created_at DESC,
-					pm.id DESC
-			) FILTER(
-				WHERE pm.id IS NOT NULL 
-			),
-			'[]' :: JSONB
+				ORDER BY pm.created_at DESC, pm.id DESC
+			) FILTER(WHERE pm.id IS NOT NULL),
+			'[]'::JSONB
 		) AS post_media,
 		json_build_object(
-			'communityId', community.id
-			'communityName', community.name,
-			'communityAvatarKey', community.avatar_key
+			'communityId', c.id,
+			'communityName', c.name,
+			'communityAvatarKey', c.avatar_key
 		) AS mini_community
 		FROM posts p
 		LEFT JOIN post_media pm ON pm.post_id = p.id
-		LEFT JOIN communities community ON community.id = @community_id
+		LEFT JOIN communities c ON c.id = p.community_id
 		WHERE p.id = @post_id
-		GROUP BY p.id
+			AND p.community_id = @community_id
+			AND p.deleted_at IS NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @user_id AND ub.blocked_id = p.author_id)
+				   OR (ub.blocker_id = p.author_id AND ub.blocked_id = @user_id)
+			)
+		GROUP BY p.id, c.id
 	`
 
 	row, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
 		"post_id":      postID,
 		"community_id": communityID,
+		"user_id":      userID,
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to process get post by id query for post_id %s: %w", postID, err)
 	}
 
-	post, err := pgx.CollectExactlyOneRow(row, pgx.RowToStructByName[post.PopulatedPost])
-
+	populatedPost, err := pgx.CollectExactlyOneRow(row, pgx.RowToStructByName[post.PopulatedPost])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse the row to the struct: %w", err)
 	}
 
-	return &post, nil
-
+	return &populatedPost, nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
-		
-	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
 
-	if err != nil{
-		return nil, fmt.Errorf("Could Not check if the user was banned by the community: %w",err)
+	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
+	if err != nil {
+		return nil, fmt.Errorf("Could Not check if the user was banned by the community: %w", err)
+	}
+	if *isUserBanned {
+		code := "USER_IS_BANNED"
+		return nil, errs.NewBadRequestError("user is banned", false, &code, nil, nil)
 	}
 
-	if *isUserBanned == true {
-		code := "USER IS BANNED FROM COMMUNITY"
-		return nil, errs.NewBadRequestError(
-			"user is banned",
-			false,
-			&code,
-			nil,
-			nil,
-		)
-	}	
-
 	stmt := `
-		SELECT cm.*,
-		COALESCE(
-			json_agg(
-				to_jsonb(camel(u))
-				ORDER BY
-					created_at DESC,
-					id DESC
-			), FILTER(
-				WHERE id IS NOT NULL
-			),
-			'[]' :: JSONB
-		) AS users
-
+		SELECT cm.user_id, u.avatar_key, u.display_name AS name, cm.joined_at, cm.role
 		FROM community_members cm
-		LEFT JOIN users u ON cm.user_id = u.id
+		JOIN users u ON u.id = cm.user_id
 		WHERE cm.community_id = @community_id
-
 	`
 
 	limit := 20
-
 	args := pgx.NamedArgs{
 		"community_id":   communityID,
 		"limit_plus_one": limit + 1,
 	}
 
+	if query.Role != nil && *query.Role != community.CommonRole {
+		stmt += " AND cm.role = @role"
+		args["role"] = *query.Role
+	}
+
 	orderStmt := ""
-
 	if *query.Order == model.OrderDesc {
-		orderStmt = "ORDER BY joined_at DESC"
+		orderStmt = "ORDER BY cm.joined_at DESC"
 		if query.CursorSortValue != nil {
-			stmt += " AND joined_at <= @joined_at "
-			args["joined_at"] = query.CursorSortValue
+			cursorTime, err := time.Parse(time.RFC3339Nano, *query.CursorSortValue)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse cursor sort value: %w", err)
+			}
+			stmt += " AND cm.joined_at <= @joined_at"
+			args["joined_at"] = cursorTime
 		}
-
 	} else {
-		orderStmt += "ORDER BY joined_at ASC"
+		orderStmt = "ORDER BY cm.joined_at ASC"
 		if query.CursorSortValue != nil {
-			stmt += " AND joined_at >= @joined_at "
-			args["joined_at"] = query.CursorSortValue
+			cursorTime, err := time.Parse(time.RFC3339Nano, *query.CursorSortValue)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse cursor sort value: %w", err)
+			}
+			stmt += " AND cm.joined_at >= @joined_at"
+			args["joined_at"] = cursorTime
 		}
 	}
 
-	stmt += orderStmt + " LIMIT @limit_plus_one"
+	stmt += " " + orderStmt + " LIMIT @limit_plus_one"
 
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to process get community members of community with comunity_id %s: %w", communityID, err)
 	}
 
 	communityMembers, err := pgx.CollectRows(rows, pgx.RowToStructByName[community.MiniCommunityUser])
-
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return &model.CursorPaginatedResponse[community.MiniCommunityUser]{
-				Data:            []community.MiniCommunityUser{},
-				CursorSortValue: *query.CursorSortValue,
-				CursorCreatedAt: *query.CursorCreatedAt,
-				HasMore:         false,
-			}, nil
-		}
 		return nil, fmt.Errorf("Failed to parse the rows to the struct: %w", err)
 	}
 
 	if len(communityMembers) < limit+1 {
-		length := len(communityMembers)
+		var cursorSortValue string
+		var cursorCreatedAt time.Time
+		if query.CursorSortValue != nil {
+			cursorSortValue = *query.CursorSortValue
+		}
+		if query.CursorCreatedAt != nil {
+			cursorCreatedAt = *query.CursorCreatedAt
+		}
 		return &model.CursorPaginatedResponse[community.MiniCommunityUser]{
-			Data:            communityMembers[:length],
-			CursorSortValue: *query.CursorSortValue,
-			CursorCreatedAt: *query.CursorCreatedAt,
+			Data:            communityMembers,
+			CursorSortValue: cursorSortValue,
+			CursorCreatedAt: cursorCreatedAt,
 			HasMore:         false,
 		}, nil
 	}
@@ -378,68 +375,57 @@ func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID uu
 
 func (r *CommunityRepository) ReportCommunityPost(ctx context.Context, userID uuid.UUID, payload *community.ReportCommunityPostPayload) (*community.CommunityReport, error) {
 	stmt := `
-		INSERT INTO
-		community_reports(
-			reporter_id,
-			community_id,
-			post_id,
-			reason,
-			status
-		)
-		VALUES(
-			@reporter_id,
-			@community_id,
-			@post_id,
-			@reason,
-			@status
-		)
-		RETURNING
-		*
+		INSERT INTO community_reports(reporter_id, community_id, post_id, reason, status)
+		VALUES(@reporter_id, @community_id, @post_id, @reason, @status)
+		RETURNING *
 	`
-	var communityReport community.CommunityReport
-	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
 		"reporter_id":  userID,
 		"community_id": payload.CommunityID,
 		"post_id":      payload.PostID,
 		"reason":       payload.Reason,
 		"status":       community.ReportPending,
-	}).Scan(&communityReport)
-
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create a report: %w", err)
+	}
+	communityReport, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.CommunityReport])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse the row to struct: %w", err)
 	}
 	return &communityReport, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.ResolveCommunityPostReportPayload) (*community.CommunityReport, error){
+func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.ResolveCommunityPostReportPayload) (*community.CommunityReport, error) {
 	check, err := r.IsModerator(ctx, communityID, userID)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to check if the user was the moderator/admin for user_id %s and community_id %s: %w", userID, communityID, err)
 	}
-
-	if *check == false {
-		return nil, fmt.Errorf("The user with user_id %s is not the moderator/admin of the community", userID)
+	if !*check {
+		code := "NOT_MODERATOR"
+		return nil, errs.NewBadRequestError("user is not a moderator/admin of the community", false, &code, nil, nil)
 	}
 
 	stmt := `
-		UPDATE community_reports SET
-		status = @updated_status
-		WHERE id = @report_id
+		UPDATE community_reports
+		SET status = @updated_status
+		WHERE id = @report_id AND community_id = @community_id
 		RETURNING *
 	`
-	var report community.CommunityReport
-	err = r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
-		"report_id" : payload.ReportID,
-		"updated_status" : payload.UpdatedStatus,
-	}).Scan(&report)
-
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+		"report_id":      payload.ReportID,
+		"updated_status": payload.UpdatedStatus,
+		"community_id":   communityID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update the report with report_id %s: %w", payload.ReportID, err)
 	}
-
+	report, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.CommunityReport])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse updated report: %w", err)
+	}
 	return &report, nil
 }
 
@@ -452,8 +438,9 @@ func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID uu
 		return fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
 	}
 
-	if *check == false {
-		return fmt.Errorf("The user with user_id %s is not a moderator/admin of the community", userID)
+	if !*check {
+		code := "NOT_MODERATOR"
+		return errs.NewBadRequestError("user is not a moderator/admin of the community", false, &code, nil, nil)
 	}
 
 	stmt := `
@@ -471,7 +458,8 @@ func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID uu
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("Post with post_id %s not found or does not belong to community_id %s", payload.PostID, communityID)
+		code := "POST_NOT_FOUND"
+		return errs.NewNotFoundError("post not found or does not belong to this community", false, &code)
 	}
 
 	return nil
@@ -479,86 +467,82 @@ func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) BanUserFromCommunity( ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.BanCommunityMemberPayload ) (*community.BannedFromCommunityUser, error) {
+func (r *CommunityRepository) BanUserFromCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.BanCommunityMemberPayload) (*community.BannedFromCommunityUser, error) {
 	check, err := r.IsModerator(ctx, communityID, userID)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
 	}
-
-	if *check == false {
-		return nil,fmt.Errorf("The user with user_id %s is not a moderator/admin of the community", userID)
+	if !*check {
+		code := "NOT_MODERATOR"
+		return nil, errs.NewBadRequestError("user is not a moderator/admin of the community", false, &code, nil, nil)
 	}
 
-	stmt := `
-		INSERT INTO banned_from_community_users (
-			community_id,
-			user_id,
-			duration
-		)
-		VALUES (
-			@community_id,
-			@user_id_to_ban,
-			@duration
-		)
-		RETURNING *
-	`
+	if payload.UserIDToBan == userID {
+		code := "CANNOT_BAN_SELF"
+		return nil, errs.NewBadRequestError("cannot ban yourself", false, &code, nil, nil)
+	}
 
-	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+	targetIsAdmin, err := r.IsAdmin(ctx, communityID, payload.UserIDToBan)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check target admin status: %w", err)
+	}
+	if *targetIsAdmin {
+		code := "CANNOT_BAN_ADMIN"
+		return nil, errs.NewBadRequestError("cannot ban the community admin", false, &code, nil, nil)
+	}
+
+	tx, err := r.server.DB.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, `
+		INSERT INTO banned_from_community_users (community_id, user_id)
+		VALUES (@community_id, @user_id_to_ban)
+		RETURNING *
+	`, pgx.NamedArgs{
 		"community_id":   communityID,
 		"user_id_to_ban": payload.UserIDToBan,
-		"duration":       payload.Duration,
 	})
-
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to ban user %s from community %s by user %s: %w",
-			payload.UserIDToBan,
-			communityID,
-			userID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to ban user %s from community %s by user %s: %w", payload.UserIDToBan, communityID, userID, err)
+	}
+	ban, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.BannedFromCommunityUser])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse banned user for community %s: %w", communityID, err)
 	}
 
-	ban, err := pgx.CollectExactlyOneRow(
-		rows,
-		pgx.RowToStructByName[community.BannedFromCommunityUser],
-	)
-
+	_, err = tx.Exec(ctx, `
+		DELETE FROM community_members WHERE community_id = @community_id AND user_id = @user_id_to_ban
+	`, pgx.NamedArgs{"community_id": communityID, "user_id_to_ban": payload.UserIDToBan})
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to parse banned user for community %s: %w",
-			communityID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to remove banned user from community_members: %w", err)
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
 	return &ban, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) GetCommunityReports( ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityReportsQuery) (*model.CursorPaginatedResponse[community.CommunityReport], error) {
+func (r *CommunityRepository) GetCommunityReports(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityReportsQuery) (*model.CursorPaginatedResponse[community.CommunityReport], error) {
 
 	check, err := r.IsModerator(ctx, communityID, userID)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
 	}
-
-	if *check == false {
-		return nil, fmt.Errorf("The user with user_id %s is not a moderator/admin of the community", userID)
+	if !*check {
+		code := "NOT_MODERATOR"
+		return nil, errs.NewBadRequestError("user is not a moderator/admin of the community", false, &code, nil, nil)
 	}
 
-	stmt := `
-		SELECT *
-		FROM community_reports
-		WHERE community_id = @community_id
-	`
+	stmt := `SELECT * FROM community_reports WHERE community_id = @community_id`
 	limit := 20
-
 	args := pgx.NamedArgs{
-		"community_id": communityID,
+		"community_id":   communityID,
 		"limit_plus_one": limit + 1,
 	}
 
@@ -587,103 +571,82 @@ func (r *CommunityRepository) GetCommunityReports( ctx context.Context, userID u
 		conditions = append(conditions, "created_at <= @reported_date_end")
 	}
 
+	if query.CursorCreatedAt != nil {
+		args["cursor_created_at"] = *query.CursorCreatedAt
+		conditions = append(conditions, "created_at <= @cursor_created_at")
+	}
+
 	if len(conditions) > 0 {
 		stmt += " AND " + strings.Join(conditions, " AND ")
 	}
 
-	stmt += `
-		ORDER BY created_at DESC
-		LIMIT @limit_plus_one
-	`
+	stmt += " ORDER BY created_at DESC LIMIT @limit_plus_one"
 
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to query community reports for community_id %s: %w",
-			communityID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to query community reports for community_id %s: %w", communityID, err)
 	}
 
 	reports, err := pgx.CollectRows(rows, pgx.RowToStructByName[community.CommunityReport])
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return &model.CursorPaginatedResponse[community.CommunityReport]{
-				Data:             []community.CommunityReport{},
-				CursorSortValue:  "",
-				CursorCreatedAt:  time.Time{},
-				HasMore:          false,
-			}, nil
-		}
-
-		return nil, fmt.Errorf(
-			"failed to collect community reports for community_id %s: %w",
-			communityID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to collect community reports for community_id %s: %w", communityID, err)
 	}
 
-	if len(reports) < limit + 1 {
+	if len(reports) < limit+1 {
+		var cursorCreatedAt time.Time
+		if query.CursorCreatedAt != nil {
+			cursorCreatedAt = *query.CursorCreatedAt
+		}
 		return &model.CursorPaginatedResponse[community.CommunityReport]{
-			Data:             reports,
-			CursorSortValue:  "",
-			CursorCreatedAt:  time.Time{},
-			HasMore:          false,
+			Data:            reports,
+			CursorSortValue: "",
+			CursorCreatedAt: cursorCreatedAt,
+			HasMore:         false,
 		}, nil
 	}
 
 	return &model.CursorPaginatedResponse[community.CommunityReport]{
-		Data: reports[:limit],
+		Data:            reports[:limit],
 		CursorSortValue: reports[limit].CreatedAt.Format(time.RFC3339Nano),
 		CursorCreatedAt: reports[limit].CreatedAt,
-		HasMore: true,
+		HasMore:         true,
 	}, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) GetReportByID( ctx context.Context, userID uuid.UUID, communityID uuid.UUID, reportID uuid.UUID ) (*community.CommunityReport, error) {
+func (r *CommunityRepository) GetReportByID(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, reportID uuid.UUID) (*community.CommunityReport, error) {
+
+	check, err := r.IsModerator(ctx, communityID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+	if !*check {
+		code := "NOT_MODERATOR"
+		return nil, errs.NewBadRequestError("user is not a moderator/admin of the community", false, &code, nil, nil)
+	}
 
 	stmt := `
-		SELECT *
-		FROM community_reports
-		WHERE id = @report_id
-		AND community_id = @community_id
+		SELECT * FROM community_reports
+		WHERE id = @report_id AND community_id = @community_id
 	`
-
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
 		"report_id":    reportID,
 		"community_id": communityID,
 	})
-
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to query report_id %s in community_id %s: %w",
-			reportID,
-			communityID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to query report_id %s in community_id %s: %w", reportID, communityID, err)
 	}
-
-	report, err := pgx.CollectExactlyOneRow(
-		rows,
-		pgx.RowToStructByName[community.CommunityReport],
-	)
-
+	report, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.CommunityReport])
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to parse report_id %s: %w",
-			reportID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to parse report_id %s: %w", reportID, err)
 	}
-
 	return &report, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) IsBannedFromCommunity( ctx context.Context, userID uuid.UUID, communityID uuid.UUID,) (*bool, error) {
+func (r *CommunityRepository) IsBannedFromCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID) (*bool, error) {
 
 	stmt := `
 		SELECT EXISTS (
@@ -767,4 +730,156 @@ func (r *CommunityRepository) IsAdmin(ctx context.Context, communityID uuid.UUID
 	return &check, nil
 }
 
+func (r *CommunityRepository) IsMember(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*bool, error) {
+	stmt := `
+		SELECT EXISTS(
+			SELECT 1 FROM community_members WHERE community_id = @community_id AND user_id = @user_id
+		)
+	`
+
+	var check bool
+
+	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"user_id":      userID,
+		"community_id": communityID,
+	}).Scan(&check)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if the user was a member for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+
+	return &check, nil
+}
+
+func (r *CommunityRepository) GetUserRole(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*community.CommunityRole, error) {
+	stmt := `
+		SELECT role FROM community_members
+		WHERE community_id = @community_id AND user_id = @user_id
+	`
+	var role community.CommunityRole
+	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"user_id":      userID,
+		"community_id": communityID,
+	}).Scan(&role)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("Failed to check role for user_id %s and community_id %s: %w", userID, communityID, err)
+	}
+	return &role, nil
+}
+
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) GetCommunities(ctx context.Context, query *community.GetCommunitiesQuery) (*model.CursorPaginatedResponse[community.MiniCommunity], error) {
+
+	stmt := `
+		SELECT c.id AS community_id, c.name, c.avatar_key
+		FROM communities c
+	`
+	conditions := []string{}
+	args := pgx.NamedArgs{}
+
+	if query.Name != nil && *query.Name != "" {
+		args["name"] = *query.Name + "%"
+		conditions = append(conditions, "c.name ILIKE @name")
+	}
+
+	orderStmt := ""
+
+	if *query.Sort == model.SortByMembersCount {
+		if *query.Order == model.OrderDesc {
+			orderStmt = "ORDER BY c.members_count DESC, c.created_at DESC"
+		} else {
+			orderStmt = "ORDER BY c.members_count ASC, c.created_at ASC"
+		}
+		if query.CursorSortValue != nil {
+			cursorCount, err := strconv.Atoi(*query.CursorSortValue)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert cursor sort value to int: %w", err)
+			}
+			args["cursor_members_count"] = cursorCount
+			args["cursor_created_at"] = query.CursorCreatedAt
+			if *query.Order == model.OrderDesc {
+				conditions = append(conditions, "((c.members_count < @cursor_members_count) OR (c.members_count = @cursor_members_count AND c.created_at <= @cursor_created_at))")
+			} else {
+				conditions = append(conditions, "((c.members_count > @cursor_members_count) OR (c.members_count = @cursor_members_count AND c.created_at >= @cursor_created_at))")
+			}
+		}
+	} else {
+		if *query.Order == model.OrderDesc {
+			orderStmt = "ORDER BY c.created_at DESC"
+		} else {
+			orderStmt = "ORDER BY c.created_at ASC"
+		}
+		if query.CursorCreatedAt != nil {
+			args["cursor_created_at"] = *query.CursorCreatedAt
+			if *query.Order == model.OrderDesc {
+				conditions = append(conditions, "c.created_at <= @cursor_created_at")
+			} else {
+				conditions = append(conditions, "c.created_at >= @cursor_created_at")
+			}
+		}
+	}
+
+	if len(conditions) > 0 {
+		stmt += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	stmt += " " + orderStmt
+
+	limit := 20
+	args["limit_plus_one"] = limit + 1
+	stmt += " LIMIT @limit_plus_one"
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to process get communities query: %w", err)
+	}
+
+	communities, err := pgx.CollectRows(rows, pgx.RowToStructByName[community.MiniCommunity])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to collect rows: %w", err)
+	}
+
+	if len(communities) < limit+1 {
+		var cursorSortValue string
+		var cursorCreatedAt time.Time
+		if query.CursorSortValue != nil {
+			cursorSortValue = *query.CursorSortValue
+		}
+		if query.CursorCreatedAt != nil {
+			cursorCreatedAt = *query.CursorCreatedAt
+		}
+		return &model.CursorPaginatedResponse[community.MiniCommunity]{
+			Data:            communities,
+			CursorSortValue: cursorSortValue,
+			CursorCreatedAt: cursorCreatedAt,
+			HasMore:         false,
+		}, nil
+	}
+
+	if *query.Sort == model.SortByMembersCount {
+		cursorSortValue := communities[limit].MembersCount
+		cursorSortCreatedAt := communities[limit].CreatedAt
+
+		return &model.CursorPaginatedResponse[community.MiniCommunity]{
+			Data:            communities[:limit],
+			CursorSortValue: strconv.Itoa(cursorSortValue),
+			CursorCreatedAt: cursorSortCreatedAt,
+			HasMore:         true,
+		}, nil
+	}
+
+	cursorSortValue := communities[limit].CreatedAt
+	cursorSortCreatedAt := communities[limit].CreatedAt
+
+	return &model.CursorPaginatedResponse[community.MiniCommunity]{
+		Data:            communities[:limit],
+		CursorSortValue: cursorSortValue.Format(time.RFC3339Nano),
+		CursorCreatedAt: cursorSortCreatedAt,
+		HasMore:         true,
+	}, nil
+
+}

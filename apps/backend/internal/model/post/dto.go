@@ -1,6 +1,7 @@
 package post
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -13,14 +14,23 @@ import (
 type CreatePostPayload struct {
 	CommunityID  *uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
 	ParentPostID *uuid.UUID `json:"parentPostId" validate:"omitempty,uuid"`
-	PostType     *PostType  `json:"postType" validate:"oneof=comment post"`
+	PostType     PostType  `json:"postType" validate:"required,oneof=comment post"`
 	Title        *string    `json:"title"`
 	Content      *string    `json:"content"`
 }
 
 func (p *CreatePostPayload) Validate() error {
 	validate := validator.New()
-	return validate.Struct(p)
+	if err := validate.Struct(p); err != nil {
+		return err
+	}
+	if p.ParentPostID != nil && p.PostType != PostTypeComment {
+		return fmt.Errorf("parentPostId requires postType 'comment'")
+	}
+	if p.ParentPostID == nil && p.PostType == PostTypeComment {
+		return fmt.Errorf("postType 'comment' requires a parentPostId")
+	}
+	return nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -70,7 +80,7 @@ func (p *GetPostsQuery) Validate() error {
 
 type GetPostsQueryResponse struct {
 	ReferenceTime                           time.Time       `json:"referenceTime"`
-	
+
 	TrendingPosts                           []PopulatedPost `json:"trendingPosts"`
 	NextTrendingCursorValue                 *float64        `json:"nextTrendingCursorValue"`
 	NextTrendingCursorCreatedAt             *time.Time      `json:"nextTrendingCursorCreatedAt"`
@@ -151,11 +161,17 @@ func (p *DeletePostVotePayload) Validate() error {
 type GetCommentsByPostIDQuery struct {
 	CursorSortValue  *string      `query:"cursorSortValue"`
 	CursorCreatedAt  *time.Time   `query:"cursorCreatedAt"`
-	Sort             *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at upvotes"`
+	Sort             *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at popularity"`
 	Order            *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
 	DateCreatedStart *time.Time   `query:"dateCreatedStart" validate:"omitempty"`
 	DateCreatedEnd   *time.Time   `query:"dateCreatedEnd" validate:"omitempty"`
 }
+
+func (p *GetCommentsByPostIDQuery) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
+
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

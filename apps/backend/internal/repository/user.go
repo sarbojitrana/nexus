@@ -31,7 +31,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 	stmt := `
 		INSERT INTO 
 			users(
-				user_name,
+				username,
 				display_name,
 				email_id,
 				clerk_id,
@@ -41,7 +41,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 			)
 		VALUES
 			(
-				@user_name,
+				@username,
 				@display_name,
 				@email_id,
 				@clerk_id,
@@ -53,7 +53,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 		*
 	`
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
-		"user_name":    payload.Username,
+		"username":     payload.Username,
 		"display_name": payload.DisplayName,
 		"email_id":     payload.EmailID,
 		"clerk_id":     payload.ClerkID,
@@ -144,14 +144,20 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, paylo
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*user.User, error) {
-	stmt := `
-		SELECT *
-		FROM users
-		WHERE id = @user_id
-	`
-	args := pgx.NamedArgs{
-		"user_id": userID,
+func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *uuid.UUID, userID uuid.UUID) (*user.User, error) {
+	
+	stmt := `SELECT * FROM users u WHERE u.id = @user_id`
+	args := pgx.NamedArgs{"user_id": userID}
+
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		stmt += `
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = u.id)
+				   OR (ub.blocker_id = u.id AND ub.blocked_id = @viewer_id)
+			)
+		`
 	}
 
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
@@ -173,7 +179,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*us
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *uuid.UUID, profileUserID uuid.UUID, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	stmt := `
 		SELECT p.*,
 		COALESCE(
@@ -191,10 +197,25 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 	`
 	limit := 10
 	args := pgx.NamedArgs{
-		"user_id":        userID,
+		"user_id":        profileUserID,
 		"limit_plus_one": limit + 1,
 	}
 	conditions := []string{}
+
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		conditions = append(conditions, `
+			(p.community_id IS NULL OR NOT EXISTS (
+				SELECT 1 FROM banned_from_community_users b
+				WHERE b.community_id = p.community_id AND b.user_id = @viewer_id
+			)) AND
+			(NOT EXISTS( 
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = p.author_id)
+				OR (ub.blocker_id = p.author_id AND ub.blocked_id = @viewer_id)
+			))
+		`)
+	}
 
 	if payload.DateCreatedStart != nil {
 		conditions = append(conditions, "p.created_at >= @date_created_start")
@@ -279,7 +300,7 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to query get posts for user id %s: %w", userID, err)
+		return nil, fmt.Errorf("Failed to query get posts for user id %s: %w", profileUserID, err)
 	}
 
 	posts, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.PopulatedPost])
@@ -288,24 +309,32 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &model.CursorPaginatedResponse[post.PopulatedPost]{
 				Data:            []post.PopulatedPost{},
-				CursorSortValue: *payload.CursorSortValue,
-				CursorCreatedAt: *payload.CursorCreatedAt,
+				CursorSortValue: "",
+				CursorCreatedAt: time.Now(),
 				HasMore:         false,
 			}, nil
 		}
 
-		return nil, fmt.Errorf("failed to collect rows from tables: todos for user_id=%s : %w", userID, err)
+		return nil, fmt.Errorf("failed to collect rows from tables: todos for user_id=%s : %w", profileUserID, err)
 	}
 
 	if len(posts) < limit+1 {
-		length := len(posts)
+		var cursorSortValue string
+		var cursorCreatedAt time.Time
+		if payload.CursorSortValue != nil {
+			cursorSortValue = *payload.CursorSortValue
+		}
+		if payload.CursorCreatedAt != nil {
+			cursorCreatedAt = *payload.CursorCreatedAt
+		}
 		return &model.CursorPaginatedResponse[post.PopulatedPost]{
-			Data:            posts[:length],
-			CursorSortValue: *payload.CursorSortValue,
-			CursorCreatedAt: *payload.CursorCreatedAt,
+			Data:            posts,
+			CursorSortValue: cursorSortValue,
+			CursorCreatedAt: cursorCreatedAt,
 			HasMore:         false,
 		}, nil
 	}
+
 	var nextCursorSortValue string
 	var nextCursorCreatedAt time.Time
 	if payload.Sort == nil || *payload.Sort == model.SortByCreatedAt {
@@ -329,7 +358,7 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, userID uuid.UUID,
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
+func (r *UserRepository) GetUsers(ctx context.Context, viewerID *uuid.UUID, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
 		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, u.created_at
@@ -337,6 +366,17 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQue
 	`
 	conditions := []string{}
 	args := pgx.NamedArgs{}
+
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		conditions = append(conditions, `
+			NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = u.id)
+				   OR (ub.blocker_id = u.id AND ub.blocked_id = @viewer_id)
+			)
+		`)
+	}
 
 	if payload.Name != nil {
 		args["name"] = *payload.Name + "%"
@@ -371,7 +411,6 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQue
 			args["cursor_created_at"] = payload.CursorCreatedAt
 			if payload.Order == nil || *payload.Order == model.OrderDesc {
 				conditions = append(conditions, "((u.follower_count < @cursor_follower_count) OR (u.follower_count = @cursor_follower_count AND u.created_at <= @cursor_created_at))")
-
 			} else {
 				conditions = append(conditions, "((u.follower_count > @cursor_follower_count) OR (u.follower_count = @cursor_follower_count AND u.created_at >= @cursor_created_at))")
 			}
@@ -392,6 +431,7 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQue
 			}
 		}
 	}
+
 	if len(conditions) > 0 {
 		stmt += " WHERE " + strings.Join(conditions, " AND ")
 	}
@@ -400,26 +440,31 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQue
 
 	limit := 20
 	args["limit_plus_one"] = limit + 1
-
 	stmt += " LIMIT @limit_plus_one"
 
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to process get users query: %w", err)
 	}
 
 	users, err := pgx.CollectRows(rows, pgx.RowToStructByName[user.MiniUser])
-
 	if err != nil {
 		return nil, fmt.Errorf("Faild to collect rows: %w", err)
 	}
 
 	if len(users) < limit+1 {
+		var cursorSortValue string
+		var cursorCreatedAt time.Time
+		if payload.CursorSortValue != nil {
+			cursorSortValue = *payload.CursorSortValue
+		}
+		if payload.CursorCreatedAt != nil {
+			cursorCreatedAt = *payload.CursorCreatedAt
+		}
 		return &model.CursorPaginatedResponse[user.MiniUser]{
 			Data:            users,
-			CursorSortValue: *payload.CursorSortValue,
-			CursorCreatedAt: *payload.CursorCreatedAt,
+			CursorSortValue: cursorSortValue,
+			CursorCreatedAt: cursorCreatedAt,
 			HasMore:         false,
 		}, nil
 	}
@@ -436,14 +481,12 @@ func (r *UserRepository) GetUsers(ctx context.Context, payload *user.GetUsersQue
 	}
 
 	nextCursorCreatedAt := users[limit].CreatedAt
-
 	return &model.CursorPaginatedResponse[user.MiniUser]{
 		Data:            users[:limit],
 		CursorSortValue: nextCursorCreatedAt.Format(time.RFC3339Nano),
 		CursorCreatedAt: nextCursorCreatedAt,
 		HasMore:         true,
 	}, nil
-
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -472,3 +515,16 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID uuid.UUID) error
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+func (r *UserRepository) GetUserByClerkID(ctx context.Context, clerkID string) (*user.User, error) {
+	stmt := `SELECT * FROM users WHERE clerk_id = @clerk_id`
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{"clerk_id": clerkID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user by clerk_id: %w", err)
+	}
+	defer rows.Close()
+	u, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[user.User])
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan user by clerk_id %s: %w", clerkID, err)
+	}
+	return &u, nil
+}

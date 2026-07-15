@@ -3,6 +3,7 @@ package user
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
@@ -21,7 +22,7 @@ type User struct {
 }
 
 type MiniUser struct {
-	ID            string    `json:"id" db:"id"`
+	ID            uuid.UUID    `json:"id" db:"id"`
 	Username      string    `json:"username" db:"username"`
 	DisplayName   string    `json:"displayName" db:"display_name"`
 	AvatarKey     string    `json:"avatarKey" db:"avatar_key"`
@@ -40,4 +41,9 @@ type UserResponse struct {
 	FollowerCount  int     `json:"followerCount" `
 	FollowingCount int     `json:"followingCount"`
 	PostsCount     int     `json:"postsCount"`
+}
+
+type UserBlock struct{
+	BlockerId 	uuid.UUID 	`json:"blockerId" db:"blocker_id"`
+	BlockedId 	uuid.UUID 	`json:"blockedId" db:"blocked_id"`
 }

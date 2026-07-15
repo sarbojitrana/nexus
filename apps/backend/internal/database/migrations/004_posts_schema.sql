@@ -46,3 +46,52 @@ CREATE INDEX idx_post_votes_post_id ON post_votes (post_id);
 
 CREATE TRIGGER set_updated_at_post_votes BEFORE
 UPDATE ON post_votes FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
+
+CREATE OR REPLACE FUNCTION increment_ancestor_comment_counts() RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.parent_post_id IS NOT NULL THEN
+		WITH RECURSIVE ancestors AS (
+			SELECT id, parent_post_id FROM posts WHERE id = NEW.parent_post_id
+			UNION ALL
+			SELECT p.id, p.parent_post_id
+			FROM posts p
+			JOIN ancestors a ON p.id = a.parent_post_id
+		)
+		UPDATE posts
+		SET comment_count = comment_count + 1
+		WHERE id IN (SELECT id FROM ancestors);
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_posts_ancestor_comment_count
+AFTER INSERT ON posts
+FOR EACH ROW EXECUTE FUNCTION increment_ancestor_comment_counts();
+
+
+
+CREATE OR REPLACE FUNCTION sync_posts_count() RETURNS TRIGGER AS $$
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		IF NEW.post_type = 'post' THEN
+			UPDATE users SET posts_count = posts_count + 1 WHERE id = NEW.author_id;
+			IF NEW.community_id IS NOT NULL THEN
+				UPDATE communities SET posts_count = posts_count + 1 WHERE id = NEW.community_id;
+			END IF;
+		END IF;
+	ELSIF TG_OP = 'DELETE' THEN
+		IF OLD.post_type = 'post' THEN
+			UPDATE users SET posts_count = posts_count - 1 WHERE id = OLD.author_id;
+			IF OLD.community_id IS NOT NULL THEN
+				UPDATE communities SET posts_count = posts_count - 1 WHERE id = OLD.community_id;
+			END IF;
+		END IF;
+	END IF;
+	RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_posts_count
+AFTER INSERT OR DELETE ON posts
+FOR EACH ROW EXECUTE FUNCTION sync_posts_count();

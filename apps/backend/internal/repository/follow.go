@@ -15,7 +15,7 @@ type FollowRepository struct{
 	server *server.Server
 }
 
-func NewFollowRepositories (server *server.Server) *FollowRepository{
+func NewFollowRepository (server *server.Server) *FollowRepository{
 	return &FollowRepository{
 		server : server,
 	}

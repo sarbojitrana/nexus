@@ -27,6 +27,41 @@ func NewPostRepository(server *server.Server) *PostRepository {
 }
 
 func (r *PostRepository) CreatePost(ctx context.Context, userID uuid.UUID, payload *post.CreatePostPayload) (*post.Post, error) {
+
+	if payload.ParentPostID != nil {
+		var parentCommunityID *uuid.UUID
+		err := r.server.DB.Pool.QueryRow(ctx, `SELECT community_id FROM posts WHERE id = @parent_id`,
+			pgx.NamedArgs{"parent_id": *payload.ParentPostID}).Scan(&parentCommunityID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to look up parent post: %w", err)
+		}
+		payload.CommunityID = parentCommunityID
+	}
+
+	com := NewCommunityRepository(r.server)
+
+	if payload.CommunityID != nil {
+		banned, err := com.IsBannedFromCommunity(ctx, userID, *payload.CommunityID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check ban status: %w", err)
+		}
+		if *banned {
+			code := "USER IS BANNED FROM COMMUNITY"
+			return nil, errs.NewBadRequestError("user is banned from this community", false, &code, nil, nil)
+		}
+	}
+
+	if payload.CommunityID != nil {
+		isMember, err := com.IsMember(ctx, *payload.CommunityID, userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check membership: %w", err)
+		}
+		if !(*isMember) {
+			code := "NOT A COMMUNITY MEMBER"
+			return nil, errs.NewBadRequestError("must be a member to post in this community", false, &code, nil, nil)
+		}
+	}
+
 	stmt := `
 		INSERT INTO posts (
 			author_id,
@@ -140,60 +175,64 @@ func (r *PostRepository) UpdatePostByID(ctx context.Context, userID uuid.UUID, p
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetPostByID(ctx context.Context, postID uuid.UUID) (*post.PopulatedPost, error) {
-	stmt := `
+func (r *PostRepository) GetPostByID(ctx context.Context, viewerID *uuid.UUID, postID uuid.UUID) (*post.PopulatedPost, error) {
+	args := pgx.NamedArgs{"post_id": postID}
+
+	banBlockFilter := ""
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		banBlockFilter = `
+			AND (p.community_id IS NULL OR NOT EXISTS (
+				SELECT 1 FROM banned_from_community_users b
+				WHERE b.community_id = p.community_id AND b.user_id = @viewer_id
+			))
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = p.author_id)
+				   OR (ub.blocker_id = p.author_id AND ub.blocked_id = @viewer_id)
+			)
+		`
+	}
+
+	stmt := fmt.Sprintf(`
 		SELECT p.*,
 		COALESCE(
 			json_agg(
 				to_jsonb(camel(pm))
-				ORDER BY
-					pm.created_at DESC,
-					pm.id DESC
-			) FILTER(
-				WHERE pm.id IS NOT NULL 
-			),
-			'[]' :: JSONB
+				ORDER BY pm.created_at DESC, pm.id DESC
+			) FILTER(WHERE pm.id IS NOT NULL),
+			'[]'::JSONB
 		) AS post_media
-
 		FROM posts p
 		LEFT JOIN post_media pm ON pm.post_id = p.id
-		WHERE p.id = @post_id
+		WHERE p.id = @post_id %s
 		GROUP BY p.id
-	`
+	`, banBlockFilter)
 
-	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
-		"post_id": postID,
-	})
-
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get post of post_id %s: %w", postID, err)
 	}
 
-	post, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[post.PopulatedPost])
-
+	populatedPost, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[post.PopulatedPost])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to convert rows to struct: %w", err)
 	}
-	return &post, nil
+	return &populatedPost, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UUID, payload *post.GetCommentsByPostIDQuery) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+func (r *PostRepository) GetCommentsByPostID(ctx context.Context, viewerID *uuid.UUID, postID uuid.UUID, payload *post.GetCommentsByPostIDQuery) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	stmt := `
 		SELECT c.*,
 		COALESCE(
 			json_agg(
 				to_jsonb(camel(pm))
-				ORDER BY
-					pm.created_at DESC,
-					pm.id DESC
-			) FILTER(
-				WHERE pm.id IS NOT NULL 
-			),
-			'[]' :: JSONB
+				ORDER BY pm.created_at DESC, pm.id DESC
+			) FILTER(WHERE pm.id IS NOT NULL),
+			'[]'::JSONB
 		) AS post_media
-
 		FROM posts c
 		LEFT JOIN post_media pm ON pm.post_id = c.id
 	`
@@ -204,6 +243,21 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 	}
 
 	conditions := []string{}
+
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		conditions = append(conditions, `
+			(c.community_id IS NULL OR NOT EXISTS (
+				SELECT 1 FROM banned_from_community_users b
+				WHERE b.community_id = c.community_id AND b.user_id = @viewer_id
+			))
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = c.author_id)
+				   OR (ub.blocker_id = c.author_id AND ub.blocked_id = @viewer_id)
+			)
+		`)
+	}
 
 	if payload.DateCreatedStart != nil {
 		conditions = append(conditions, "c.created_at >= @date_created_start")
@@ -237,7 +291,7 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 			args["cursor_sort_value"] = cursorSortValue
 			args["cursor_created_at"] = payload.CursorCreatedAt
 
-			if *payload.Order == model.OrderDesc {
+			if payload.Order == nil || *payload.Order == model.OrderDesc {
 				stmt += ` AND (
 					c.upvotes + c.comment_count + c.downvotes < @cursor_sort_value
 					OR (
@@ -255,7 +309,6 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 				)`
 			}
 		}
-
 	} else {
 		if payload.Order == nil || *payload.Order == model.OrderDesc {
 			orderStmt += " ORDER BY c.created_at DESC "
@@ -269,18 +322,10 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 				return nil, fmt.Errorf("Failed to parse cursor sort value: %w", err)
 			}
 			args["cursor_sort_value"] = cursorTime
-			if *payload.Order == model.OrderDesc {
-				stmt += `
-					AND (
-						c.created_at <= @cursor_sort_value
-					)
-				`
+			if payload.Order == nil || *payload.Order == model.OrderDesc {
+				stmt += " AND (c.created_at <= @cursor_sort_value)"
 			} else {
-				stmt += `
-					AND (
-						c.created_at >= @cursor_sort_value
-					)
-				`
+				stmt += " AND (c.created_at >= @cursor_sort_value)"
 			}
 		}
 	}
@@ -290,33 +335,28 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 	stmt += " LIMIT @limit_plus_one"
 
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to query to get comments for post_id %s: %w", postID, err)
 	}
 
 	comments, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.PopulatedPost])
-
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return &model.CursorPaginatedResponse[post.PopulatedPost]{
-				Data:            []post.PopulatedPost{},
-				CursorSortValue: *payload.CursorSortValue,
-				CursorCreatedAt: *payload.CursorCreatedAt,
-				HasMore:         false,
-			}, nil
-		}
-
 		return nil, fmt.Errorf("Failed to collect rows from tables for post_id=%s: %w", postID, err)
-
 	}
 
 	if len(comments) < limit+1 {
-		length := len(comments)
+		var cursorSortValue string
+		var cursorCreatedAt time.Time
+		if payload.CursorSortValue != nil {
+			cursorSortValue = *payload.CursorSortValue
+		}
+		if payload.CursorCreatedAt != nil {
+			cursorCreatedAt = *payload.CursorCreatedAt
+		}
 		return &model.CursorPaginatedResponse[post.PopulatedPost]{
-			Data:            comments[:length],
-			CursorSortValue: *payload.CursorSortValue,
-			CursorCreatedAt: *payload.CursorCreatedAt,
+			Data:            comments,
+			CursorSortValue: cursorSortValue,
+			CursorCreatedAt: cursorCreatedAt,
 			HasMore:         false,
 		}, nil
 	}
@@ -325,84 +365,99 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, postID uuid.UU
 	var nextCursorCreatedAt time.Time
 
 	if payload.Sort == nil || *payload.Sort == model.SortByPopularity {
-		nextCursorSortValue = strconv.Itoa((comments[limit].Upvotes + comments[limit].CommentCount + comments[limit].Downvotes))
+		nextCursorSortValue = strconv.Itoa(comments[limit].Upvotes + comments[limit].CommentCount + comments[limit].Downvotes)
 		nextCursorCreatedAt = comments[limit].CreatedAt
 	} else {
 		nextCursorSortValue = comments[limit].CreatedAt.Format(time.RFC3339Nano)
 		nextCursorCreatedAt = comments[limit].CreatedAt
 	}
 
-	HasMore := true
-
 	return &model.CursorPaginatedResponse[post.PopulatedPost]{
 		Data:            comments[:limit],
 		CursorSortValue: nextCursorSortValue,
 		CursorCreatedAt: nextCursorCreatedAt,
-		HasMore:         HasMore,
+		HasMore:         true,
 	}, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, commentID uuid.UUID, query *post.GetRepliesByCommentIDQuery) (*model.OffsetPaginatedResponse[post.PopulatedPost], error) {
+func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, viewerID *uuid.UUID, commentID uuid.UUID, query *post.GetRepliesByCommentIDQuery) (*model.OffsetPaginatedResponse[post.PopulatedPost], error) {
 
-	stmt := `
+	args := pgx.NamedArgs{
+		"comment_id": commentID,
+		"limit":      *query.Limit,
+		"offset":     (*query.Page - 1) * (*query.Limit),
+	}
+
+	banBlockFilter := ""
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		banBlockFilter = `
+			AND (r.community_id IS NULL OR NOT EXISTS (
+				SELECT 1 FROM banned_from_community_users b
+				WHERE b.community_id = r.community_id AND b.user_id = @viewer_id
+			))
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = r.author_id)
+				   OR (ub.blocker_id = r.author_id AND ub.blocked_id = @viewer_id)
+			)
+		`
+	}
+
+	stmt := fmt.Sprintf(`
 		SELECT r.*,
 		COALESCE(
 			json_agg(
 				to_jsonb(camel(pm))
 				ORDER BY pm.created_at DESC
-			) FILTER(
-				WHERE pm.id IS NOT NULL
-			),
-			'[]' :: jsonb
+			) FILTER(WHERE pm.id IS NOT NULL),
+			'[]'::jsonb
 		) AS post_media
 		FROM posts r
-		LEFT JOIN post_media pm
-		ON pm.post_id = r.id
-		WHERE r.parent_post_id = @comment_id 
+		LEFT JOIN post_media pm ON pm.post_id = r.id
+		WHERE r.parent_post_id = @comment_id %s
 		GROUP BY r.id
 		ORDER BY r.upvotes + r.downvotes + r.comment_count DESC, r.created_at DESC
 		LIMIT @limit OFFSET @offset
-	`
+	`, banBlockFilter)
 
-	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
-		"comment_id": commentID,
-		"limit":      *query.Limit,
-		"offset":     (*query.Page - 1) * (*query.Limit),
-	})
-
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to query to get replies for comment_id %s: %w", commentID, err)
 	}
 
 	replies, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.PopulatedPost])
-
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return &model.OffsetPaginatedResponse[post.PopulatedPost]{
-				Data:       []post.PopulatedPost{},
-				Page:       *query.Page,
-				Limit:      *query.Limit,
-				Total:      0,
-				TotalPages: 0,
-			}, nil
-		}
 		return nil, fmt.Errorf("Failed to collect rows for comment_id %s: %w", commentID, err)
 	}
 
-	countStmt := `
+	countArgs := pgx.NamedArgs{"comment_id": commentID}
+	countBanBlockFilter := ""
+	if viewerID != nil {
+		countArgs["viewer_id"] = *viewerID
+		countBanBlockFilter = `
+			AND (r.community_id IS NULL OR NOT EXISTS (
+				SELECT 1 FROM banned_from_community_users b
+				WHERE b.community_id = r.community_id AND b.user_id = @viewer_id
+			))
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = r.author_id)
+				   OR (ub.blocker_id = r.author_id AND ub.blocked_id = @viewer_id)
+			)
+		`
+	}
+
+	countStmt := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM posts r
-		WHERE r.parent_post_id = @comment_id
-	`
+		WHERE r.parent_post_id = @comment_id %s
+	`, countBanBlockFilter)
 
 	var total int
-
-	err = r.server.DB.Pool.QueryRow(ctx, countStmt, pgx.NamedArgs{
-		"comment_id": commentID,
-	}).Scan(&total)
-
+	err = r.server.DB.Pool.QueryRow(ctx, countStmt, countArgs).Scan(&total)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to count total replies for comment_id %s: %w", commentID, err)
 	}
@@ -425,7 +480,54 @@ func (r *PostRepository) ReactToPost(ctx context.Context, userID uuid.UUID, post
 	}
 	defer tx.Rollback(ctx)
 
-	reaction, err := r.getReaction(ctx, userID, postID)
+	var authorID uuid.UUID
+	var communityID *uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT author_id, community_id FROM posts WHERE id = @post_id AND deleted_at IS NULL`,
+		pgx.NamedArgs{"post_id": postID}).Scan(&authorID, &communityID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			code := "POST_NOT_FOUND"
+			return errs.NewNotFoundError("post not found", false, &code)
+		}
+		return fmt.Errorf("failed to look up post %s: %w", postID, err)
+	}
+
+	if authorID == userID {
+		code := "CANNOT_VOTE_OWN_POST"
+		return errs.NewBadRequestError("cannot vote on your own post", false, &code, nil, nil)
+	}
+
+	if communityID != nil {
+		var banned bool
+		err = tx.QueryRow(ctx, `
+			SELECT EXISTS(SELECT 1 FROM banned_from_community_users WHERE community_id = @community_id AND user_id = @user_id)
+		`, pgx.NamedArgs{"community_id": *communityID, "user_id": userID}).Scan(&banned)
+		if err != nil {
+			return fmt.Errorf("failed to check ban status: %w", err)
+		}
+		if banned {
+			code := "USER_IS_BANNED"
+			return errs.NewBadRequestError("user is banned from this community", false, &code, nil, nil)
+		}
+	}
+
+	var blocked bool
+	err = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM user_blocks
+			WHERE (blocker_id = @user_id AND blocked_id = @author_id)
+			   OR (blocker_id = @author_id AND blocked_id = @user_id)
+		)
+	`, pgx.NamedArgs{"user_id": userID, "author_id": authorID}).Scan(&blocked)
+	if err != nil {
+		return fmt.Errorf("failed to check block status: %w", err)
+	}
+	if blocked {
+		code := "USER_BLOCKED"
+		return errs.NewBadRequestError("cannot interact with this user's content", false, &code, nil, nil)
+	}
+
+	reaction, err := r.getReactionTx(ctx, tx, userID, postID)
 	if err != nil {
 		return err
 	}
@@ -533,35 +635,21 @@ func (r *PostRepository) ReactToPost(ctx context.Context, userID uuid.UUID, post
 	return nil
 }
 
-func (r *PostRepository) getReaction(ctx context.Context, userID uuid.UUID, postID uuid.UUID) (*post.VoteType, error) {
-
+func (r *PostRepository) getReactionTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, postID uuid.UUID) (*post.VoteType, error) {
 	stmt := `
 		SELECT vote_type
 		FROM post_votes
-		WHERE post_id = @post_id
-		AND user_id = @user_id
+		WHERE post_id = @post_id AND user_id = @user_id
+		FOR UPDATE
 	`
-
 	var voteType post.VoteType
-
-	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
-		"post_id": postID,
-		"user_id": userID,
-	}).Scan(&voteType)
-
+	err := tx.QueryRow(ctx, stmt, pgx.NamedArgs{"post_id": postID, "user_id": userID}).Scan(&voteType)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
-
-		return nil, fmt.Errorf(
-			"failed to get reaction for user_id %s and post_id %s: %w",
-			userID,
-			postID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to get reaction for user_id %s and post_id %s: %w", userID, postID, err)
 	}
-
 	return &voteType, nil
 }
 
@@ -602,7 +690,7 @@ func (r *PostRepository) GetPosts(ctx context.Context, userID *uuid.UUID, payloa
 	if followingUsersLimit > 0 {
 		filter := `
 			AND p.author_id IN (
-				SELECT followee_id FROM user_follows WHERE follower_id = @user_id
+				SELECT following_id FROM user_follows WHERE follower_id = @user_id
 			)
 		`
 		posts, hasMore, nextCreatedAt, err := r.fetchFollowingLane(

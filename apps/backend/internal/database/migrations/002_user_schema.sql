@@ -2,7 +2,7 @@ CREATE TABLE
     users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         email_id TEXT NOT NULL,
-        clerk_id TEXT NOT NULL,
+        clerk_id TEXT UNIQUE NOT NULL,
         username VARCHAR(50) NOT NULL,
         display_name VARCHAR(50) NOT NULL,
         bio TEXT,
@@ -39,8 +39,26 @@ CREATE TABLE user_blocks (
     blocker_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
     blocked_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (blocker_id, blocker_id)
+    PRIMARY KEY (blocker_id, blocked_id)
 );
 
 CREATE INDEX user_blocks_blocker_id ON user_blocks(blocker_id);
 CREATE INDEX user_blocks_blocked_id ON user_blocks(blocked_id);
+
+
+CREATE OR REPLACE FUNCTION sync_user_follow_counts() RETURNS TRIGGER AS $$
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		UPDATE users SET following_count = following_count + 1 WHERE id = NEW.follower_id;
+		UPDATE users SET follower_count = follower_count + 1 WHERE id = NEW.following_id;
+	ELSIF TG_OP = 'DELETE' THEN
+		UPDATE users SET following_count = following_count - 1 WHERE id = OLD.follower_id;
+		UPDATE users SET follower_count = follower_count - 1 WHERE id = OLD.following_id;
+	END IF;
+	RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_user_follows_counts
+AFTER INSERT OR DELETE ON user_follows
+FOR EACH ROW EXECUTE FUNCTION sync_user_follow_counts();

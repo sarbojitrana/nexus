@@ -11,23 +11,18 @@ import (
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreateCommunityPayload struct {
-	AdminID     uuid.UUID       `json:"adminId" validate:"required,uuid"`
-	Name        string          `json:"name" validate:"required,max=50"`
-	Slug        string          `json:"slug" validate:"required,max=50"`
-	Description *string         `json:"description" validate:"omitempty,max=1000"`
-	AvatarKey   *string         `json:"avatarKey"`
-	BannerKey   *string         `json:"bannerKey"`
-	CanPost     *PostPermission `json:"canPost"`
+	AdminID     uuid.UUID `json:"adminId" validate:"required,uuid"`
+	Name        string    `json:"name" validate:"required,max=50"`
+	Slug        string    `json:"slug" validate:"required,max=50"`
+	Description *string   `json:"description" validate:"omitempty,max=1000"`
+	AvatarKey   *string   `json:"avatarKey"`
+	BannerKey   *string   `json:"bannerKey"`
 }
 
 func (p *CreateCommunityPayload) Validate() error {
 	validate := validator.New()
 	if err := validate.Struct(p); err != nil {
 		return err
-	}
-	if p.CanPost == nil {
-		defaultCanPost := AllPost
-		p.CanPost = &defaultCanPost
 	}
 	return nil
 }
@@ -41,7 +36,6 @@ type UpdateCommunitySettingsPayload struct {
 	Description *string   `json:"description" validate:"omitempty,max=1000"`
 	AvatarKey   *string   `json:"avatarKey"`
 	BannerKey   *string   `json:"bannerKey"`
-	CanPost     *string   `json:"canPost"`
 }
 
 func (p *UpdateCommunitySettingsPayload) Validate() error {
@@ -55,7 +49,7 @@ func (p *UpdateCommunitySettingsPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ChangeMemberRoleInCommunityPayload struct {
-	MemberUserID uuid.UUID     `json:"memberUserId" validate:"required,uuid"`
+	TargetUserID uuid.UUID     `json:"memberUserId" validate:"required,uuid"`
 	NewRole      CommunityRole `json:"newRole" validate:"required,max=50"`
 }
 
@@ -111,15 +105,12 @@ func (p *GetCommunityByIDPayload) Validate() error {
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 type GetCommunitiesQuery struct {
-	Name             *string    `query:"name" validate:"omitempty,max=50"`
-	CursorSortValue  *string    `query:"cursorSortValue"`
-	CursorCreatedAt  *time.Time `query:"cursorCreatedAt"`
-	Sort             *string    `query:"sort" validate:"omitempty,oneof=created_at members_count posts_count"`
-	Order            *string    `query:"order" validate:"omitempty,oneof=asc desc"`
-	DateCreatedStart *string    `query:"dateCreatedStart"`
-	DateCreatedEnd   *string    `query:"dateCreatedEnd"`
+	CursorSortValue *string      `query:"cursorSortValue"`
+	CursorCreatedAt *time.Time   `query:"cursorCreatedAt"`
+	Sort            *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at members_count"`
+	Order           *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+	Name            *string      `query:"name" validate:"omitempty"`
 }
 
 func (p *GetCommunitiesQuery) Validate() error {
@@ -127,20 +118,17 @@ func (p *GetCommunitiesQuery) Validate() error {
 	if err := validate.Struct(p); err != nil {
 		return err
 	}
-
+	if p.Sort == nil {
+		defaultSort := model.SortByMembersCount
+		p.Sort = &defaultSort
+	}
+	if p.Order == nil {
+		defaultOrder := model.OrderDesc
+		p.Order = &defaultOrder
+	}
 	if p.Name == nil {
 		defaultName := ""
 		p.Name = &defaultName
-	}
-
-	if p.Sort == nil {
-		defaultSort := "members_count"
-		p.Sort = &defaultSort
-	}
-
-	if p.Order == nil {
-		defaultOrder := "desc"
-		p.Order = &defaultOrder
 	}
 	return nil
 }
@@ -151,7 +139,7 @@ type GetCommunityMembersQuery struct {
 	CursorSortValue *string        `query:"cursorSortValue"`
 	CursorCreatedAt *time.Time     `query:"cursorCreatedAt"`
 	Order           *model.Order   `query:"order" validate:"omitempty,oneof=asc desc"`
-	Role            *CommunityRole `query:"role" validate:"oneof= all moderator member"`
+	Role            *CommunityRole `query:"role" validate:"omitempty,oneof=all moderator member"`
 }
 
 func (p *GetCommunityMembersQuery) Validate() error {
@@ -212,8 +200,7 @@ func (p *DeleteCommunityPostPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type BanCommunityMemberPayload struct {
-	UserIDToBan uuid.UUID     `json:"userIdToBan" validate:"required,uuid"`
-	Duration    time.Duration `json:"duration" validate:"required"`
+	UserIDToBan uuid.UUID `json:"userIdToBan" validate:"required,uuid"`
 }
 
 func (p *BanCommunityMemberPayload) Validate() error {
@@ -228,6 +215,7 @@ type GetCommunityReportsQuery struct {
 	Status            *CommunityReportStatus `query:"statusId" validate:"omitempty,oneof=pending dismissed resolved"`
 	ReportedDateStart string                 `query:"reportedDateStart"`
 	ReportedDateEnd   string                 `query:"reportedDateEnd"`
+	CursorCreatedAt   *time.Time             `query:"cursorCreatedAt"`
 }
 
 func (p *GetCommunityReportsQuery) Validate() error {

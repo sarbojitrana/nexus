@@ -18,9 +18,10 @@ const (
 type CommunityRole string
 
 const (
-	MemberRole CommunityRole = "member"
-	AdminRole  CommunityRole = "admin"
-	CommonRole CommunityRole = "all"
+	MemberRole    CommunityRole = "member"
+	AdminRole     CommunityRole = "admin"
+	ModeratorRole CommunityRole = "moderator"
+	CommonRole    CommunityRole = "all"
 )
 
 type CommunityReportStatus string
@@ -52,26 +53,18 @@ type CommunityMember struct {
 }
 type MiniCommunity struct {
 	CommnunityID uuid.UUID `json:"communityId" db:"community_id"`
+	Slug         string    `json:"slug" db:"slug"` 
 	Name         string    `json:"communityName" db:"name"`
 	AvatarKey    string    `json:"communityAvatarKey" db:"avatar_key"`
-}
-type CommnunitySummary struct {
-	MiniCommunity
 	MembersCount int `json:"membersCount" db:"members_count"`
 	PostsCount   int `json:"postsCount" db:"posts_count"`
+	model.BaseWithCreatedAt
 }
 
 type ViewCommunityPost struct {
 	post.Post
 	PostMedia []post.PostMedia `json:"postMedia" db:"post_media"`
 	Community *MiniCommunity   `json:"miniCommunity" db:"mini_community"`
-}
-
-type CommnunityFollow struct {
-	model.BaseWithId
-	model.BaseWithCreatedAt
-	FollowerID  uuid.UUID `json:"followerId" db:"follower_id"`
-	CommunityID uuid.UUID `json:"communityId" db:"community_id"`
 }
 
 type CommunityReport struct {
@@ -86,7 +79,6 @@ type CommunityReport struct {
 type BannedFromCommunityUser struct {
 	CommnunityID uuid.UUID     `json:"communityId" db:"community_id"`
 	UserID       uuid.UUID     `json:"userId" db:"user_id"`
-	Duration     time.Duration `json:"duration" db:"duration"`
 	model.BaseWithCreatedAt
 }
 
@@ -96,4 +88,9 @@ type MiniCommunityUser struct {
 	Name      string        `json:"name" db:"name"`
 	JoinedAt  time.Time     `json:"joinedAt" db:"joined_at"`
 	Role      CommunityRole `json:"role" db:"role"`
+}
+
+type CommunityResponse struct {
+	Community
+	ViewerRole *CommunityRole `json:"viewerRole"`
 }
