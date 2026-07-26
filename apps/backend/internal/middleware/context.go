@@ -102,3 +102,16 @@ func GetLogger(c echo.Context) *zerolog.Logger {
 	logger := zerolog.Nop()
 	return &logger
 }
+
+// GetLoggerFromContext extracts the request-scoped logger from a plain
+// context.Context, for callers (the service layer) that don't have an
+// echo.Context. EnhanceContext stashes the same logger into the request's
+// context.Context under LoggerKey, so this returns the identical instance
+// GetLogger would.
+func GetLoggerFromContext(ctx context.Context) *zerolog.Logger {
+	if logger, ok := ctx.Value(LoggerKey).(*zerolog.Logger); ok {
+		return logger
+	}
+	logger := zerolog.Nop()
+	return &logger
+}

@@ -9,8 +9,8 @@ import (
 
 type UserFollow struct {
 	model.BaseWithCreatedAt
-	FollowerID  uuid.UUID `json:"followerId" db:"follower_id"`
-	FollowingID uuid.UUID `json:"followingId" db:"following_id"`
+	FollowerID  string `json:"followerId" db:"follower_id"`
+	FollowingID string `json:"followingId" db:"following_id"`
 }
 
 func (f *UserFollow) SelfFollowCheck() bool {
@@ -22,6 +22,6 @@ func (f *UserFollow) SelfFollowCheck() bool {
 
 type CommunityFollow struct {
 	model.BaseWithCreatedAt
-	FollowerID  uuid.UUID `json:"followerId" db:"follower_id"`
+	FollowerID  string    `json:"followerId" db:"follower_id"`
 	CommunityID uuid.UUID `json:"communityId" db:"community_id"`
 }

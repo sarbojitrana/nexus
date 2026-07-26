@@ -53,9 +53,14 @@ yarn-error.log*
 *.pem
 
 tsconfig.tsbuildinfo
-.env
+.env*
+!.env.example
 .turbo
 .vscode
 
+# Next.js
+.next/
+next-env.d.ts
+.vercel
 
 go_nexus

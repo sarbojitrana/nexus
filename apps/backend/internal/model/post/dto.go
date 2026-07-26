@@ -14,7 +14,7 @@ import (
 type CreatePostPayload struct {
 	CommunityID  *uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
 	ParentPostID *uuid.UUID `json:"parentPostId" validate:"omitempty,uuid"`
-	PostType     PostType  `json:"postType" validate:"required,oneof=comment post"`
+	PostType     PostType   `json:"postType" validate:"required,oneof=comment post"`
 	Title        *string    `json:"title"`
 	Content      *string    `json:"content"`
 }
@@ -36,7 +36,7 @@ func (p *CreatePostPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type DeletePostByIDPayload struct {
-	ID uuid.UUID `json:"id" validate:"required,uuid"`
+	ID uuid.UUID `param:"id" validate:"required,uuid"`
 }
 
 func (p *DeletePostByIDPayload) Validate() error {
@@ -64,8 +64,8 @@ type GetPostsQuery struct {
 	FollowingUsersLimit       *int       `query:"followingUsersLimit"`
 	FollowingCommunitiesLimit *int       `query:"followingCommunitiesLimit"`
 
-	TrendingCursorValue                 *float64   `query:"trendingCursorValue"`
-	TrendingCursorCreatedAt             *time.Time `query:"trendingCursorCreatedAt"`
+	TrendingCursorValue     *float64   `query:"trendingCursorValue"`
+	TrendingCursorCreatedAt *time.Time `query:"trendingCursorCreatedAt"`
 
 	FollowingUsersCursorCreatedAt       *time.Time `query:"followingUsersCursorCreatedAt"`
 	FollowingCommunitiesCursorCreatedAt *time.Time `query:"followingCommunitiesCursorCreatedAt"`
@@ -79,16 +79,16 @@ func (p *GetPostsQuery) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetPostsQueryResponse struct {
-	ReferenceTime                           time.Time       `json:"referenceTime"`
+	ReferenceTime time.Time `json:"referenceTime"`
 
-	TrendingPosts                           []PopulatedPost `json:"trendingPosts"`
-	NextTrendingCursorValue                 *float64        `json:"nextTrendingCursorValue"`
-	NextTrendingCursorCreatedAt             *time.Time      `json:"nextTrendingCursorCreatedAt"`
-	HasMoreTrending                         bool            `json:"hasMoreTrending"`
+	TrendingPosts               []PopulatedPost `json:"trendingPosts"`
+	NextTrendingCursorValue     *float64        `json:"nextTrendingCursorValue"`
+	NextTrendingCursorCreatedAt *time.Time      `json:"nextTrendingCursorCreatedAt"`
+	HasMoreTrending             bool            `json:"hasMoreTrending"`
 
-	FollowingUsersPosts                     []PopulatedPost `json:"followingUsersPosts"`
-	NextFollowingUsersCursorCreatedAt       *time.Time      `json:"nextFollowingUsersCursorCreatedAt"`
-	HasMoreFollowingUsers                   bool            `json:"hasMoreFollowingUsers"`
+	FollowingUsersPosts               []PopulatedPost `json:"followingUsersPosts"`
+	NextFollowingUsersCursorCreatedAt *time.Time      `json:"nextFollowingUsersCursorCreatedAt"`
+	HasMoreFollowingUsers             bool            `json:"hasMoreFollowingUsers"`
 
 	FollowingCommunitiesPosts               []PopulatedPost `json:"followingCommunitiesPosts"`
 	NextFollowingCommunitiesCursorCreatedAt *time.Time      `json:"nextFollowingCommunitiesCursorCreatedAt"`
@@ -113,7 +113,7 @@ func (p *CreatePostMediaPayload) Validate() error {
 
 type DeletePostMediaPayload struct {
 	ID     uuid.UUID `json:"id" validate:"required,uuid"`
-	UserID uuid.UUID `json:"userId" validate:"required,uuid"`
+	userID string    `json:"userId" validate:"required,uuid"`
 }
 
 func (p *DeletePostMediaPayload) Validate() error {
@@ -148,7 +148,7 @@ func (p *CreatePostVotePayload) Validate() error {
 
 type DeletePostVotePayload struct {
 	ID     uuid.UUID `json:"id" validate:"required,uuid"`
-	UserID uuid.UUID `json:"userId" validate:"required,uuid"`
+	userID string    `json:"userId" validate:"required,uuid"`
 }
 
 func (p *DeletePostVotePayload) Validate() error {
@@ -171,7 +171,6 @@ func (p *GetCommentsByPostIDQuery) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
-
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

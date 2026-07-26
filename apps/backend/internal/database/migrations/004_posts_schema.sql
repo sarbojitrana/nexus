@@ -1,7 +1,7 @@
 CREATE TABLE
     posts (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-        author_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
+        author_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
         community_id UUID REFERENCES communities ON DELETE CASCADE,
         parent_post_id UUID REFERENCES posts ON DELETE CASCADE,
         post_type VARCHAR(50) NOT NULL DEFAULT 'post',
@@ -35,7 +35,7 @@ CREATE INDEX idx_post_media_post_id ON post_media (post_id);
 CREATE TABLE
     post_votes (
         post_id UUID NOT NULL REFERENCES posts ON DELETE CASCADE,
-        user_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
         PRIMARY KEY (post_id, user_id),
         vote_type TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

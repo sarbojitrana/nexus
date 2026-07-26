@@ -23,7 +23,7 @@ const (
 
 type Post struct {
 	model.Base
-	AuthorID            uuid.UUID  `json:"authorId" db:"author_id"`
+	AuthorID            string     `json:"authorId" db:"author_id"`
 	CommunityID         *uuid.UUID `json:"communityId" db:"community_id"`
 	ParentPostID        *uuid.UUID `json:"parentPostId" db:"parent_post_id"`
 	PostType            PostType   `json:"postType" db:"post_type"`
@@ -49,7 +49,7 @@ type PostMedia struct {
 
 type PostVote struct {
 	PostID   uuid.UUID `json:"postId" db:"post_id"`
-	UserID   uuid.UUID `json:"userId" db:"user_id"`
+	UserID   string    `json:"userId" db:"user_id"`
 	VoteType VoteType  `json:"voteType" db:"vote_type"`
 	model.BaseWithCreatedAt
 	model.BaseWithUpdatedAt

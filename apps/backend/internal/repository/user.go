@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/sarbojitrana/nexus/internal/errs"
 	"github.com/sarbojitrana/nexus/internal/model"
@@ -29,34 +28,34 @@ func NewUserRepository(server *server.Server) *UserRepository {
 
 func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUserPayload) (*user.User, error) {
 	stmt := `
-		INSERT INTO 
+		INSERT INTO
 			users(
+				id,
 				username,
 				display_name,
 				email_id,
-				clerk_id,
 				bio,
 				avatar_key,
 				banner_key
 			)
 		VALUES
 			(
+				@id,
 				@username,
 				@display_name,
 				@email_id,
-				@clerk_id,
 				@bio,
 				@avatar_key,
 				@banner_key
 			)
-		RETURNING 
+		RETURNING
 		*
 	`
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+		"id":           payload.ClerkID,
 		"username":     payload.Username,
 		"display_name": payload.DisplayName,
 		"email_id":     payload.EmailID,
-		"clerk_id":     payload.ClerkID,
 		"bio":          payload.Bio,
 		"avatar_key":   payload.AvatarKey,
 		"banner_key":   payload.BannerKey,
@@ -79,7 +78,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, payload *user.UpdateUserPayload) (*user.User, error) {
+func (r *UserRepository) UpdateUser(ctx context.Context, userID string, payload *user.UpdateUserPayload) (*user.User, error) {
 	stmt := `
 		UPDATE users SET 
 	`
@@ -91,11 +90,6 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, paylo
 	if payload.Username != nil {
 		setClauses = append(setClauses, "username = @username")
 		args["username"] = payload.Username
-	}
-
-	if payload.EmailID != nil {
-		setClauses = append(setClauses, "email_id = @email_id")
-		args["email_id"] = payload.EmailID
 	}
 
 	if payload.DisplayName != nil {
@@ -144,7 +138,7 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID uuid.UUID, paylo
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *uuid.UUID, userID uuid.UUID) (*user.User, error) {
+func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *string, userID string) (*user.User, error) {
 
 	stmt := `SELECT * FROM users u WHERE u.id = @user_id`
 	args := pgx.NamedArgs{"user_id": userID}
@@ -179,7 +173,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *uuid.UUID, u
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *uuid.UUID, profileUserID uuid.UUID, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *string, profileUserID string, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	stmt := `
 		SELECT p.*,
 		COALESCE(
@@ -358,7 +352,7 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *uuid.UU
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetUsers(ctx context.Context, viewerID *uuid.UUID, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
+func (r *UserRepository) GetUsers(ctx context.Context, viewerID *string, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
 		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, u.created_at
@@ -491,7 +485,7 @@ func (r *UserRepository) GetUsers(ctx context.Context, viewerID *uuid.UUID, payl
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+func (r *UserRepository) DeleteUser(ctx context.Context, userID string) error {
 	stmt := `
 		DELETE FROM users
 		WHERE
@@ -515,21 +509,34 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID uuid.UUID) error
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *UserRepository) GetUserByClerkID(ctx context.Context, clerkID string) (*user.User, error) {
-	stmt := `SELECT * FROM users WHERE clerk_id = @clerk_id`
-	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{"clerk_id": clerkID})
+// UpdateUserEmail syncs a user's email from Clerk. Kept separate from UpdateUser
+// since email is not part of the user-facing profile update payload.
+func (r *UserRepository) UpdateUserEmail(ctx context.Context, userID string, email string) (*user.User, error) {
+	stmt := `UPDATE users SET email_id = @email_id WHERE id = @user_id RETURNING *`
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
+		"user_id":  userID,
+		"email_id": email,
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to query user by clerk_id: %w", err)
+		return nil, fmt.Errorf("failed to update email for user_id %s: %w", userID, err)
 	}
+
 	defer rows.Close()
-	u, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[user.User])
+
+	updatedUser, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[user.User])
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan user by clerk_id %s: %w", clerkID, err)
+		return nil, fmt.Errorf("failed to scan updated user for user_id %s: %w", userID, err)
 	}
-	return &u, nil
+
+	return &updatedUser, nil
 }
 
-func (r *UserRepository) IsUserBlocked(ctx context.Context, userID uuid.UUID, blockerID uuid.UUID) (*bool, error) {
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *UserRepository) IsUserBlocked(ctx context.Context, userID string, blockerID string) (*bool, error) {
 
 	stmt := `
 		SELECT EXISTS(
@@ -539,10 +546,10 @@ func (r *UserRepository) IsUserBlocked(ctx context.Context, userID uuid.UUID, bl
 		)
 	`
 	var blocked bool
-	err := r.server.DB.Pool.QueryRow(ctx,stmt , pgx.NamedArgs{
-		"user_id": userID,
+	err := r.server.DB.Pool.QueryRow(ctx, stmt, pgx.NamedArgs{
+		"user_id":    userID,
 		"blocker_id": blockerID,
-		}).Scan(&blocked)
+	}).Scan(&blocked)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check block status: %w", err)
 	}

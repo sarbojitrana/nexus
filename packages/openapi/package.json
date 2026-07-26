@@ -12,7 +12,11 @@
   "exports": {
     "./contracts": {
       "types": "./dist/contracts/index.d.ts",
-      "default": "./dist/contract/index.js"
+      "default": "./dist/contracts/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
     }
   },
   "keywords": [],

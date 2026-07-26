@@ -5,3 +5,7 @@ extendZodWithOpenApi(z);
 
 export * from "./utils.js";
 export * from "./health.js";
+export * from "./user.js";
+export * from "./post.js";
+export * from "./community.js";
+export * from "./follow.js";

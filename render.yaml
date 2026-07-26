@@ -1,0 +1,98 @@
+services:
+  - type: web
+    name: nexus-backend
+    runtime: docker
+    dockerfilePath: ./apps/backend/Dockerfile
+    dockerContext: ./apps/backend
+    plan: starter
+    region: oregon
+    healthCheckPath: /status
+    envVars:
+      - key: NEXUS_PRIMARY.ENV
+        value: production
+      - key: NEXUS_SERVER.PORT
+        value: "10000"
+      - key: NEXUS_SERVER.READ_TIMEOUT
+        value: "10"
+      - key: NEXUS_SERVER.WRITE_TIMEOUT
+        value: "10"
+      - key: NEXUS_SERVER.IDLE_TIMEOUT
+        value: "60"
+      - key: NEXUS_SERVER.CORS_ALLOWED_ORIGINS
+        sync: false # e.g. https://nexus.vercel.app
+      - key: NEXUS_DATABASE.HOST
+        fromDatabase:
+          name: nexus-db
+          property: host
+      - key: NEXUS_DATABASE.PORT
+        fromDatabase:
+          name: nexus-db
+          property: port
+      - key: NEXUS_DATABASE.USER
+        fromDatabase:
+          name: nexus-db
+          property: user
+      - key: NEXUS_DATABASE.PASSWORD
+        fromDatabase:
+          name: nexus-db
+          property: password
+      - key: NEXUS_DATABASE.NAME
+        fromDatabase:
+          name: nexus-db
+          property: database
+      - key: NEXUS_DATABASE.SSL_MODE
+        value: require
+      - key: NEXUS_DATABASE.MAX_OPEN_CONNS
+        value: "20"
+      - key: NEXUS_DATABASE.MAX_IDLE_CONNS
+        value: "5"
+      - key: NEXUS_DATABASE.CONN_MAX_LIFETIME
+        value: "300"
+      - key: NEXUS_DATABASE.CONN_MAX_IDLE_TIME
+        value: "60"
+      - key: NEXUS_REDIS.ADDRESS
+        fromService:
+          name: nexus-redis
+          type: redis
+          property: connectionString
+      - key: NEXUS_AUTH.SECRET_KEY
+        sync: false
+      - key: NEXUS_AUTH.WEBHOOK_SECRET
+        sync: false
+      - key: NEXUS_INTEGRATION.RESEND_API_KEY
+        sync: false
+      - key: NEXUS_OBSERVABILITY.SERVICE_NAME
+        value: nexus
+      - key: NEXUS_OBSERVABILITY.ENVIRONMENT
+        value: production
+      - key: NEXUS_OBSERVABILITY.LOGGING.LEVEL
+        value: info
+      - key: NEXUS_OBSERVABILITY.LOGGING.FORMAT
+        value: json
+      - key: NEXUS_OBSERVABILITY.LOGGING.SLOW_QUERY_THRESHOLD
+        value: 200ms
+      - key: NEXUS_OBSERVABILITY.NEW_RELIC.LICENSE_KEY
+        sync: false
+      - key: NEXUS_OBSERVABILITY.NEW_RELIC.APP_LOG_FORWARDING_ENABLED
+        value: "true"
+      - key: NEXUS_OBSERVABILITY.NEW_RELIC.DISTRIBUTED_TRACING_ENABLED
+        value: "true"
+      - key: NEXUS_OBSERVABILITY.NEW_RELIC.DEBUG_LOGGING
+        value: "false"
+      - key: NEXUS_OBSERVABILITY.HEALTH_CHECKS.ENABLED
+        value: "true"
+      - key: NEXUS_OBSERVABILITY.HEALTH_CHECKS.INTERVAL
+        value: 30s
+      - key: NEXUS_OBSERVABILITY.HEALTH_CHECKS.TIMEOUT
+        value: 5s
+
+  - type: redis
+    name: nexus-redis
+    plan: starter
+    region: oregon
+    ipAllowList: []
+
+databases:
+  - name: nexus-db
+    plan: starter
+    region: oregon

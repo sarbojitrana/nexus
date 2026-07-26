@@ -3,13 +3,13 @@ package user
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
 type User struct {
-	model.Base
-	ClerkID        string  `json:"clerkId" db:"clerk_id"`
+	model.BaseWithCreatedAt
+	model.BaseWithUpdatedAt
+	UserID         string  `json:"id" db:"id"`
 	Username       string  `json:"username" db:"username"`
 	EmailID        string  `json:"emailId" db:"email_id"`
 	DisplayName    string  `json:"displayName" db:"display_name"`
@@ -22,7 +22,7 @@ type User struct {
 }
 
 type MiniUser struct {
-	ID            uuid.UUID    `json:"id" db:"id"`
+	ID            string    `json:"id" db:"id"`
 	Username      string    `json:"username" db:"username"`
 	DisplayName   string    `json:"displayName" db:"display_name"`
 	AvatarKey     string    `json:"avatarKey" db:"avatar_key"`
@@ -32,7 +32,9 @@ type MiniUser struct {
 }
 
 type UserResponse struct {
-	model.Base
+	model.BaseWithCreatedAt
+	model.BaseWithUpdatedAt
+	ID             string  `json:"id"`
 	Username       string  `json:"username"`
 	DisplayName    string  `json:"displayName"`
 	Bio            *string `json:"bio"`
@@ -43,7 +45,7 @@ type UserResponse struct {
 	PostsCount     int     `json:"postsCount"`
 }
 
-type UserBlock struct{
-	BlockerId 	uuid.UUID 	`json:"blockerId" db:"blocker_id"`
-	BlockedId 	uuid.UUID 	`json:"blockedId" db:"blocked_id"`
+type UserBlock struct {
+	BlockerId string `json:"blockerId" db:"blocker_id"`
+	BlockedId string `json:"blockedId" db:"blocked_id"`
 }

@@ -53,6 +53,12 @@ type OffsetPaginatedResponse[T any] struct {
 	TotalPages int `json:"totalPages"`
 }
 
+// Empty is a no-op Validatable payload for endpoints that take no request body,
+// so they can still go through the generic handler.Handle wrapper.
+type Empty struct{}
+
+func (Empty) Validate() error { return nil }
+
 type CursorPaginatedResponse[T any] struct {
 	Data            []T       `json:"data"`
 	CursorSortValue string    `json:"cursorSortValue"`

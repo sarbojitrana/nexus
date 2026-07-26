@@ -34,18 +34,18 @@ const (
 
 type Community struct {
 	model.Base
-	AdminID      uuid.UUID `json:"adminId" db:"admin_id"`
-	Name         string    `json:"name" db:"name"`
-	Slug         string    `json:"slug" db:"slug"`
-	Description  *string   `json:"description" db:"description"`
-	AvatarKey    *string   `json:"avatarKey" db:"avatar_key"`
-	BannerKey    *string   `json:"bannerKey" db:"banner_key"`
-	MembersCount int       `json:"membersCount" db:"members_count"`
-	PostsCount   int       `json:"postsCount" db:"posts_count"`
+	AdminID      string  `json:"adminId" db:"admin_id"`
+	Name         string  `json:"name" db:"name"`
+	Slug         string  `json:"slug" db:"slug"`
+	Description  *string `json:"description" db:"description"`
+	AvatarKey    *string `json:"avatarKey" db:"avatar_key"`
+	BannerKey    *string `json:"bannerKey" db:"banner_key"`
+	MembersCount int     `json:"membersCount" db:"members_count"`
+	PostsCount   int     `json:"postsCount" db:"posts_count"`
 }
 
 type CommunityMember struct {
-	UserID      uuid.UUID     `json:"userId" db:"user_id"`
+	UserID      string        `json:"userId" db:"user_id"`
 	CommunityID uuid.UUID     `json:"communityId" db:"community_id"`
 	Role        CommunityRole `json:"role" db:"role"`
 	JoinedAt    time.Time     `json:"joinedAt" db:"joined_at"`
@@ -53,11 +53,11 @@ type CommunityMember struct {
 }
 type MiniCommunity struct {
 	CommnunityID uuid.UUID `json:"communityId" db:"community_id"`
-	Slug         string    `json:"slug" db:"slug"` 
+	Slug         string    `json:"slug" db:"slug"`
 	Name         string    `json:"communityName" db:"name"`
 	AvatarKey    string    `json:"communityAvatarKey" db:"avatar_key"`
-	MembersCount int `json:"membersCount" db:"members_count"`
-	PostsCount   int `json:"postsCount" db:"posts_count"`
+	MembersCount int       `json:"membersCount" db:"members_count"`
+	PostsCount   int       `json:"postsCount" db:"posts_count"`
 	model.BaseWithCreatedAt
 }
 
@@ -69,7 +69,7 @@ type ViewCommunityPost struct {
 
 type CommunityReport struct {
 	model.Base
-	ReporterID   uuid.UUID             `json:"reporterId" db:"reporter_id"`
+	ReporterID   string                `json:"reporterId" db:"reporter_id"`
 	CommnunityID uuid.UUID             `json:"communityId" db:"community_id"`
 	PostID       uuid.UUID             `json:"postId" db:"post_id"`
 	Reason       string                `json:"reason" db:"reason"`
@@ -77,13 +77,13 @@ type CommunityReport struct {
 }
 
 type BannedFromCommunityUser struct {
-	CommnunityID uuid.UUID     `json:"communityId" db:"community_id"`
-	UserID       uuid.UUID     `json:"userId" db:"user_id"`
+	CommnunityID uuid.UUID `json:"communityId" db:"community_id"`
+	UserID       string    `json:"userId" db:"user_id"`
 	model.BaseWithCreatedAt
 }
 
 type MiniCommunityUser struct {
-	UserID    uuid.UUID     `json:"userId" db:"user_id"`
+	UserID    string        `json:"userId" db:"user_id"`
 	AvatarKey string        `json:"avatarKey" db:"avatar_key"`
 	Name      string        `json:"name" db:"name"`
 	JoinedAt  time.Time     `json:"joinedAt" db:"joined_at"`

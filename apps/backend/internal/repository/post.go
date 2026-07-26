@@ -26,7 +26,7 @@ func NewPostRepository(server *server.Server) *PostRepository {
 	}
 }
 
-func (r *PostRepository) CreatePost(ctx context.Context, userID uuid.UUID, payload *post.CreatePostPayload) (*post.Post, error) {
+func (r *PostRepository) CreatePost(ctx context.Context, userID string, payload *post.CreatePostPayload) (*post.Post, error) {
 
 	if payload.ParentPostID != nil {
 		var parentCommunityID *uuid.UUID
@@ -107,7 +107,7 @@ func (r *PostRepository) CreatePost(ctx context.Context, userID uuid.UUID, paylo
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) DeletePostByID(ctx context.Context, userID uuid.UUID, payload *post.DeletePostByIDPayload) error {
+func (r *PostRepository) DeletePostByID(ctx context.Context, userID string, payload *post.DeletePostByIDPayload) error {
 	stmt := `
 		DELETE FROM posts
 		WHERE author_id = @author_id
@@ -131,7 +131,7 @@ func (r *PostRepository) DeletePostByID(ctx context.Context, userID uuid.UUID, p
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) UpdatePostByID(ctx context.Context, userID uuid.UUID, postID uuid.UUID, payload *post.UpdatePostByIDPayload) (*post.Post, error) {
+func (r *PostRepository) UpdatePostByID(ctx context.Context, userID string, postID uuid.UUID, payload *post.UpdatePostByIDPayload) (*post.Post, error) {
 	stmt := `
 		UPDATE posts
 	`
@@ -175,7 +175,7 @@ func (r *PostRepository) UpdatePostByID(ctx context.Context, userID uuid.UUID, p
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetPostByID(ctx context.Context, viewerID *uuid.UUID, postID uuid.UUID) (*post.PopulatedPost, error) {
+func (r *PostRepository) GetPostByID(ctx context.Context, viewerID *string, postID uuid.UUID) (*post.PopulatedPost, error) {
 	args := pgx.NamedArgs{"post_id": postID}
 
 	banBlockFilter := ""
@@ -223,7 +223,7 @@ func (r *PostRepository) GetPostByID(ctx context.Context, viewerID *uuid.UUID, p
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetCommentsByPostID(ctx context.Context, viewerID *uuid.UUID, postID uuid.UUID, payload *post.GetCommentsByPostIDQuery) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+func (r *PostRepository) GetCommentsByPostID(ctx context.Context, viewerID *string, postID uuid.UUID, payload *post.GetCommentsByPostIDQuery) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	stmt := `
 		SELECT c.*,
 		COALESCE(
@@ -382,7 +382,7 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, viewerID *uuid
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, viewerID *uuid.UUID, commentID uuid.UUID, query *post.GetRepliesByCommentIDQuery) (*model.OffsetPaginatedResponse[post.PopulatedPost], error) {
+func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, viewerID *string, commentID uuid.UUID, query *post.GetRepliesByCommentIDQuery) (*model.OffsetPaginatedResponse[post.PopulatedPost], error) {
 
 	args := pgx.NamedArgs{
 		"comment_id": commentID,
@@ -473,14 +473,14 @@ func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, viewerID *uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) ReactToPost(ctx context.Context, userID uuid.UUID, postID uuid.UUID, payload *post.ReactToPostPayload) error {
+func (r *PostRepository) ReactToPost(ctx context.Context, userID string, postID uuid.UUID, payload *post.ReactToPostPayload) error {
 	tx, err := r.server.DB.Pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	var authorID uuid.UUID
+	var authorID string
 	var communityID *uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT author_id, community_id FROM posts WHERE id = @post_id AND deleted_at IS NULL`,
 		pgx.NamedArgs{"post_id": postID}).Scan(&authorID, &communityID)
@@ -635,7 +635,7 @@ func (r *PostRepository) ReactToPost(ctx context.Context, userID uuid.UUID, post
 	return nil
 }
 
-func (r *PostRepository) getReactionTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, postID uuid.UUID) (*post.VoteType, error) {
+func (r *PostRepository) getReactionTx(ctx context.Context, tx pgx.Tx, userID string, postID uuid.UUID) (*post.VoteType, error) {
 	stmt := `
 		SELECT vote_type
 		FROM post_votes
@@ -655,7 +655,7 @@ func (r *PostRepository) getReactionTx(ctx context.Context, tx pgx.Tx, userID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *PostRepository) GetPosts(ctx context.Context, userID *uuid.UUID, payload *post.GetPostsQuery) (*post.GetPostsQueryResponse, error) {
+func (r *PostRepository) GetPosts(ctx context.Context, userID *string, payload *post.GetPostsQuery) (*post.GetPostsQueryResponse, error) {
 
 	referenceTime := time.Now()
 	if payload.ReferenceTime != nil {
@@ -726,7 +726,7 @@ func (r *PostRepository) GetPosts(ctx context.Context, userID *uuid.UUID, payloa
 	return resp, nil
 }
 
-func (r *PostRepository) fetchTrendingLane(ctx context.Context, userID *uuid.UUID, referenceTime time.Time, windowStart time.Time, limit int, cursorValue *float64, cursorCreatedAt *time.Time) ([]post.PopulatedPost, bool, *float64, *time.Time, error) {
+func (r *PostRepository) fetchTrendingLane(ctx context.Context, userID *string, referenceTime time.Time, windowStart time.Time, limit int, cursorValue *float64, cursorCreatedAt *time.Time) ([]post.PopulatedPost, bool, *float64, *time.Time, error) {
 
 	args := pgx.NamedArgs{
 		"reference_time": referenceTime,
@@ -830,7 +830,7 @@ func (r *PostRepository) fetchTrendingLane(ctx context.Context, userID *uuid.UUI
 	return posts, hasMore, nextVal, nextCreatedAt, nil
 }
 
-func (r *PostRepository) fetchFollowingLane(ctx context.Context, userID *uuid.UUID, windowStart time.Time, referenceTime time.Time, limit int, extraFilterSQL string, cursorCreatedAt *time.Time) ([]post.PopulatedPost, bool, *time.Time, error) {
+func (r *PostRepository) fetchFollowingLane(ctx context.Context, userID *string, windowStart time.Time, referenceTime time.Time, limit int, extraFilterSQL string, cursorCreatedAt *time.Time) ([]post.PopulatedPost, bool, *time.Time, error) {
 
 	args := pgx.NamedArgs{
 		"user_id":        *userID,

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
@@ -29,7 +28,6 @@ func (p *CreateUserPayload) Validate() error {
 
 type UpdateUserPayload struct {
 	Username    *string `json:"username" validate:"omitempty,max=50"`
-	EmailID     *string `json:"emailId" validate:"omitempty"`
 	DisplayName *string `json:"displayName" validate:"omitempty,max=50"`
 	Bio         *string `json:"bio" validate:"omitempty,max=1000"`
 	AvatarKey   *string `json:"avatarKey" validate:"omitempty"`
@@ -44,7 +42,7 @@ func (p *UpdateUserPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetUserByIDQuery struct {
-	ID uuid.UUID `query:"id" validate:"required,uuid"`
+	ID string `param:"id" validate:"required"`
 }
 
 func (p *GetUserByIDQuery) Validate() error {
@@ -55,13 +53,13 @@ func (p *GetUserByIDQuery) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetUsersQuery struct {
-	CursorSortValue *string      `json:"cursorSortValue"`
-	CursorCreatedAt *time.Time   `json:"cursorCreatedAt"`
-	Sort            *model.Sort  `json:"sort" validate:"omitempty,oneof=created_at follower_count"`
-	Order           *model.Order `json:"order" validate:"omitempty,oneof=asc desc"`
-	Name            *string      `json:"name" validate:"omitempty"`
-	DateJoinedStart *time.Time   `json:"dateJoinedStart" validate:"omitempty"`
-	DateJoinedEnd   *time.Time   `json:"dateJoinedEnd" validate:"omitempty"`
+	CursorSortValue *string      `query:"cursorSortValue"`
+	CursorCreatedAt *time.Time   `query:"cursorCreatedAt"`
+	Sort            *model.Sort  `query:"sort" validate:"omitempty,oneof=created_at follower_count"`
+	Order           *model.Order `query:"order" validate:"omitempty,oneof=asc desc"`
+	Name            *string      `query:"name" validate:"omitempty"`
+	DateJoinedStart *time.Time   `query:"dateJoinedStart" validate:"omitempty"`
+	DateJoinedEnd   *time.Time   `query:"dateJoinedEnd" validate:"omitempty"`
 }
 
 func (p *GetUsersQuery) Validate() error {

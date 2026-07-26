@@ -11,12 +11,13 @@ import (
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type CreateCommunityPayload struct {
-	AdminID     uuid.UUID `json:"adminId" validate:"required,uuid"`
-	Name        string    `json:"name" validate:"required,max=50"`
-	Slug        string    `json:"slug" validate:"required,max=50"`
-	Description *string   `json:"description" validate:"omitempty,max=1000"`
-	AvatarKey   *string   `json:"avatarKey"`
-	BannerKey   *string   `json:"bannerKey"`
+	// AdminID is set by the service from the authenticated caller, not the body.
+	AdminID     string  `json:"adminId" validate:"omitempty"`
+	Name        string  `json:"name" validate:"required,max=50"`
+	Slug        string  `json:"slug" validate:"required,max=50"`
+	Description *string `json:"description" validate:"omitempty,max=1000"`
+	AvatarKey   *string `json:"avatarKey"`
+	BannerKey   *string `json:"bannerKey"`
 }
 
 func (p *CreateCommunityPayload) Validate() error {
@@ -30,12 +31,13 @@ func (p *CreateCommunityPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type UpdateCommunitySettingsPayload struct {
-	UserID      uuid.UUID `jso:"userId" validate:"required,uuid"`
-	Name        *string   `json:"name" validate:"omitempty,max=50"`
-	Slug        *string   `json:"slug" validate:"omitempty,max=50"`
-	Description *string   `json:"description" validate:"omitempty,max=1000"`
-	AvatarKey   *string   `json:"avatarKey"`
-	BannerKey   *string   `json:"bannerKey"`
+	// UserID is set by the service from the authenticated caller, not the body.
+	UserID      string  `json:"userId" validate:"omitempty"`
+	Name        *string `json:"name" validate:"omitempty,max=50"`
+	Slug        *string `json:"slug" validate:"omitempty,max=50"`
+	Description *string `json:"description" validate:"omitempty,max=1000"`
+	AvatarKey   *string `json:"avatarKey"`
+	BannerKey   *string `json:"bannerKey"`
 }
 
 func (p *UpdateCommunitySettingsPayload) Validate() error {
@@ -49,8 +51,9 @@ func (p *UpdateCommunitySettingsPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ChangeMemberRoleInCommunityPayload struct {
-	TargetUserID uuid.UUID     `json:"memberUserId" validate:"required,uuid"`
-	NewRole      CommunityRole `json:"newRole" validate:"required,max=50"`
+	// TargetUserID is sourced from the :userId path param by the handler, not the body.
+	TargetUserID string        `json:"memberUserId" validate:"omitempty"`
+	NewRole      CommunityRole `json:"newRole" validate:"required,oneof=member moderator admin"`
 }
 
 func (p *ChangeMemberRoleInCommunityPayload) Validate() error {
@@ -65,7 +68,7 @@ func (p *ChangeMemberRoleInCommunityPayload) Validate() error {
 
 type CommunityFollowPayload struct {
 	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
-	FollowerID  uuid.UUID `json:"followerId" validate:"required,uuid"`
+	FollowerID  string    `json:"followerId" validate:"required,uuid"`
 }
 
 func (p *CommunityFollowPayload) Validate() error {
@@ -104,7 +107,7 @@ func (p *GetCommunityByIDPayload) Validate() error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 type GetCommunitiesQuery struct {
 	CursorSortValue *string      `query:"cursorSortValue"`
 	CursorCreatedAt *time.Time   `query:"cursorCreatedAt"`
@@ -164,7 +167,8 @@ func (p *GetCommunityMembersQuery) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ReportCommunityPostPayload struct {
-	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
+	// CommunityID is sourced from the :id path param by the handler, not the body.
+	CommunityID uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
 	PostID      uuid.UUID `json:"postId" validate:"required,uuid"`
 	Reason      string    `json:"reason" validate:"required,max=1000"`
 }
@@ -177,8 +181,9 @@ func (p *ReportCommunityPostPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type ResolveCommunityPostReportPayload struct {
-	ReportID      uuid.UUID             `json:"reportId" validate:"required,uuid"`
-	UpdatedStatus CommunityReportStatus `json:"updatedStatus" validate:"required,oneof= resolved dismissed"`
+	// ReportID is sourced from the :reportId path param by the handler, not the body.
+	ReportID      uuid.UUID             `json:"reportId" validate:"omitempty,uuid"`
+	UpdatedStatus CommunityReportStatus `json:"updatedStatus" validate:"required,oneof=resolved dismissed"`
 }
 
 func (p *ResolveCommunityPostReportPayload) Validate() error {
@@ -200,7 +205,7 @@ func (p *DeleteCommunityPostPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type BanCommunityMemberPayload struct {
-	UserIDToBan uuid.UUID `json:"userIdToBan" validate:"required,uuid"`
+	UserIDToBan string `json:"userIdToBan" validate:"required"`
 }
 
 func (p *BanCommunityMemberPayload) Validate() error {
@@ -211,7 +216,9 @@ func (p *BanCommunityMemberPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetCommunityReportsQuery struct {
-	CommunityID       uuid.UUID              `query:"communityId" validate:"required,uuid"`
+	// CommunityID is unused -- the repository takes it as a path-derived
+	// positional argument instead, kept here only for backward-compat binding.
+	CommunityID       uuid.UUID              `query:"communityId" validate:"omitempty,uuid"`
 	Status            *CommunityReportStatus `query:"statusId" validate:"omitempty,oneof=pending dismissed resolved"`
 	ReportedDateStart string                 `query:"reportedDateStart"`
 	ReportedDateEnd   string                 `query:"reportedDateEnd"`

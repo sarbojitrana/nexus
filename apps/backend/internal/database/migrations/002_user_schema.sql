@@ -1,8 +1,7 @@
 CREATE TABLE
     users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-        email_id TEXT NOT NULL,
-        clerk_id TEXT UNIQUE NOT NULL,
+        id TEXT PRIMARY KEY,
+        email_id TEXT UNIQUE NOT NULL,
         username VARCHAR(50) NOT NULL,
         display_name VARCHAR(50) NOT NULL,
         bio TEXT,
@@ -15,7 +14,6 @@ CREATE TABLE
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
-CREATE INDEX idx_users_clerk_id ON users (clerk_id);
 CREATE INDEX idx_users_email_id ON users (email_id);
 CREATE UNIQUE INDEX idx_users_username ON users (username);
 
@@ -24,8 +22,8 @@ UPDATE ON users FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
 
 CREATE TABLE
     user_follows (
-        follower_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
-        following_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
+        follower_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
+        following_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
         PRIMARY KEY (follower_id, following_id),
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT self_follow_check CHECK (follower_id <> following_id)
@@ -36,8 +34,8 @@ CREATE INDEX idx_user_follows_following_id ON user_follows (following_id);
 
 
 CREATE TABLE user_blocks (
-    blocker_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
-    blocked_id UUID NOT NULL REFERENCES users ON DELETE CASCADE,
+    blocker_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
+    blocked_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (blocker_id, blocked_id)
 );

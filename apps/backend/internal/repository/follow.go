@@ -29,7 +29,7 @@ func NewFollowRepository(server *server.Server) *FollowRepository {
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *FollowRepository) FollowCommunity(ctx context.Context, userID uuid.UUID, payload *follow.FollowCommunityPayload) (*follow.CommunityFollow, error) {
+func (r *FollowRepository) FollowCommunity(ctx context.Context, userID string, payload *follow.FollowCommunityPayload) (*follow.CommunityFollow, error) {
 
 	commRepo := NewCommunityRepository(r.server)
 	bannedCheck, err := commRepo.IsBannedFromCommunity(ctx, userID, payload.CommunityID)
@@ -40,7 +40,7 @@ func (r *FollowRepository) FollowCommunity(ctx context.Context, userID uuid.UUID
 
 	if *bannedCheck {
 		code := "USER IS BANNED"
-		errs.NewBadRequestError(
+		return nil, errs.NewBadRequestError(
 			"can't follow this community",
 			false,
 			&code,
@@ -91,7 +91,7 @@ func (r *FollowRepository) FollowCommunity(ctx context.Context, userID uuid.UUID
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *FollowRepository) UnFollowCommunity(ctx context.Context, userID uuid.UUID, payload *follow.UnFollowCommunityPayload) error {
+func (r *FollowRepository) UnFollowCommunity(ctx context.Context, userID string, payload *follow.UnFollowCommunityPayload) error {
 
 	stmt := `
 		DELETE FROM community_follows
@@ -101,13 +101,13 @@ func (r *FollowRepository) UnFollowCommunity(ctx context.Context, userID uuid.UU
 
 	result, err := r.server.DB.Pool.Exec(ctx, stmt, pgx.NamedArgs{
 		"follower_id":  userID,
-		"community_id": payload.ID,
+		"community_id": payload.CommunityID,
 	})
 
 	if err != nil {
 		return fmt.Errorf(
 			"failed to unfollow community %s for user_id %s: %w",
-			payload.ID,
+			payload.CommunityID,
 			userID,
 			err,
 		)
@@ -127,8 +127,13 @@ func (r *FollowRepository) UnFollowCommunity(ctx context.Context, userID uuid.UU
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *FollowRepository) FollowUser(ctx context.Context, userID uuid.UUID, payload *follow.FollowUserPayload) (*follow.UserFollow, error) {
+func (r *FollowRepository) FollowUser(ctx context.Context, userID string, payload *follow.FollowUserPayload) (*follow.UserFollow, error) {
 	userRepo := NewUserRepository(r.server)
+
+	if !(&follow.UserFollow{FollowerID: userID, FollowingID: payload.FollowingID}).SelfFollowCheck() {
+		code := "CANNOT_FOLLOW_SELF"
+		return nil, errs.NewBadRequestError("cannot follow yourself", false, &code, nil, nil)
+	}
 
 	blockedCheck, err := userRepo.IsUserBlocked(ctx, userID, payload.FollowingID)
 
@@ -138,7 +143,7 @@ func (r *FollowRepository) FollowUser(ctx context.Context, userID uuid.UUID, pay
 
 	if *blockedCheck {
 		code := "USER IS BLOCKED"
-		errs.NewBadRequestError(
+		return nil, errs.NewBadRequestError(
 			"can't follow this user",
 			false,
 			&code,
@@ -192,7 +197,7 @@ func (r *FollowRepository) FollowUser(ctx context.Context, userID uuid.UUID, pay
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *FollowRepository) UnFollowUser(ctx context.Context, userID uuid.UUID, payload *follow.UnFollowUserPayload) error {
+func (r *FollowRepository) UnFollowUser(ctx context.Context, userID string, payload *follow.UnFollowUserPayload) error {
 
 	stmt := `
 		DELETE FROM user_follows
@@ -228,7 +233,7 @@ func (r *FollowRepository) UnFollowUser(ctx context.Context, userID uuid.UUID, p
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *FollowRepository) GetFollowers(ctx context.Context, viewerID *uuid.UUID, userID uuid.UUID, query *follow.GetFollowersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
+func (r *FollowRepository) GetFollowers(ctx context.Context, viewerID *string, userID string, query *follow.GetFollowersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
 		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, uf.created_at
@@ -306,7 +311,7 @@ func (r *FollowRepository) GetFollowers(ctx context.Context, viewerID *uuid.UUID
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *FollowRepository) GetFollowing(ctx context.Context, viewerID *uuid.UUID, userID uuid.UUID, query *follow.GetFollowersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
+func (r *FollowRepository) GetFollowing(ctx context.Context, viewerID *string, userID string, query *follow.GetFollowersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
 		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, uf.created_at
@@ -380,6 +385,46 @@ func (r *FollowRepository) GetFollowing(ctx context.Context, viewerID *uuid.UUID
 		CursorCreatedAt: following[limit].CreatedAt,
 		HasMore:         true,
 	}, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *FollowRepository) IsFollowingUser(ctx context.Context, followerID string, followingID string) (*bool, error) {
+	var check bool
+
+	err := r.server.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM user_follows WHERE follower_id = @follower_id AND following_id = @following_id
+		)
+	`, pgx.NamedArgs{
+		"follower_id":  followerID,
+		"following_id": followingID,
+	}).Scan(&check)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user_id %s follows user_id %s: %w", followerID, followingID, err)
+	}
+
+	return &check, nil
+}
+
+func (r *FollowRepository) IsFollowingCommunity(ctx context.Context, followerID string, communityID uuid.UUID) (*bool, error) {
+	var check bool
+
+	err := r.server.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM community_follows WHERE follower_id = @follower_id AND community_id = @community_id
+		)
+	`, pgx.NamedArgs{
+		"follower_id":  followerID,
+		"community_id": communityID,
+	}).Scan(&check)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user_id %s follows community_id %s: %w", followerID, communityID, err)
+	}
+
+	return &check, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -155,7 +155,7 @@ func (r *CommunityRepository) UpdateCommunitySettings(ctx context.Context, commu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) DeleteCommunity(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) error {
+func (r *CommunityRepository) DeleteCommunity(ctx context.Context, communityID uuid.UUID, userID string) error {
 	stmt := `
 		DELETE FROM communities 
 		WHERE id = @community_id
@@ -181,7 +181,7 @@ func (r *CommunityRepository) DeleteCommunity(ctx context.Context, communityID u
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, communityID uuid.UUID, userID uuid.UUID, payload *community.ChangeMemberRoleInCommunityPayload) (*community.CommunityMember, error) {
+func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, communityID uuid.UUID, userID string, payload *community.ChangeMemberRoleInCommunityPayload) (*community.CommunityMember, error) {
 
 	check, err := r.IsAdmin(ctx, communityID, userID)
 	if err != nil {
@@ -222,7 +222,7 @@ func (r *CommunityRepository) ChangeMemberRoleInCommunity(ctx context.Context, c
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) GetCommunityPostByID(ctx context.Context, userID uuid.UUID, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
+func (r *CommunityRepository) GetCommunityPostByID(ctx context.Context, userID string, postID uuid.UUID, communityID uuid.UUID) (*post.PopulatedPost, error) {
 
 	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
 	if err != nil {
@@ -279,7 +279,7 @@ func (r *CommunityRepository) GetCommunityPostByID(ctx context.Context, userID u
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
+func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID string, communityID uuid.UUID, query *community.GetCommunityMembersQuery) (*model.CursorPaginatedResponse[community.MiniCommunityUser], error) {
 
 	isUserBanned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
 	if err != nil {
@@ -373,7 +373,7 @@ func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) ReportCommunityPost(ctx context.Context, userID uuid.UUID, payload *community.ReportCommunityPostPayload) (*community.CommunityReport, error) {
+func (r *CommunityRepository) ReportCommunityPost(ctx context.Context, userID string, payload *community.ReportCommunityPostPayload) (*community.CommunityReport, error) {
 	stmt := `
 		INSERT INTO community_reports(reporter_id, community_id, post_id, reason, status)
 		VALUES(@reporter_id, @community_id, @post_id, @reason, @status)
@@ -398,7 +398,7 @@ func (r *CommunityRepository) ReportCommunityPost(ctx context.Context, userID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.ResolveCommunityPostReportPayload) (*community.CommunityReport, error) {
+func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, userID string, communityID uuid.UUID, payload *community.ResolveCommunityPostReportPayload) (*community.CommunityReport, error) {
 	check, err := r.IsModerator(ctx, communityID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to check if the user was the moderator/admin for user_id %s and community_id %s: %w", userID, communityID, err)
@@ -431,7 +431,7 @@ func (r *CommunityRepository) ResolveCommunityPostReport(ctx context.Context, us
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.DeleteCommunityPostPayload) error {
+func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID string, communityID uuid.UUID, payload *community.DeleteCommunityPostPayload) error {
 	check, err := r.IsModerator(ctx, communityID, userID)
 
 	if err != nil {
@@ -467,7 +467,7 @@ func (r *CommunityRepository) DeleteCommunityPost(ctx context.Context, userID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) BanUserFromCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, payload *community.BanCommunityMemberPayload) (*community.BannedFromCommunityUser, error) {
+func (r *CommunityRepository) BanUserFromCommunity(ctx context.Context, userID string, communityID uuid.UUID, payload *community.BanCommunityMemberPayload) (*community.BannedFromCommunityUser, error) {
 	check, err := r.IsModerator(ctx, communityID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to check if the user was a moderator for user_id %s and community_id %s: %w", userID, communityID, err)
@@ -528,7 +528,7 @@ func (r *CommunityRepository) BanUserFromCommunity(ctx context.Context, userID u
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) GetCommunityReports(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, query *community.GetCommunityReportsQuery) (*model.CursorPaginatedResponse[community.CommunityReport], error) {
+func (r *CommunityRepository) GetCommunityReports(ctx context.Context, userID string, communityID uuid.UUID, query *community.GetCommunityReportsQuery) (*model.CursorPaginatedResponse[community.CommunityReport], error) {
 
 	check, err := r.IsModerator(ctx, communityID, userID)
 	if err != nil {
@@ -615,7 +615,7 @@ func (r *CommunityRepository) GetCommunityReports(ctx context.Context, userID uu
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) GetReportByID(ctx context.Context, userID uuid.UUID, communityID uuid.UUID, reportID uuid.UUID) (*community.CommunityReport, error) {
+func (r *CommunityRepository) GetReportByID(ctx context.Context, userID string, communityID uuid.UUID, reportID uuid.UUID) (*community.CommunityReport, error) {
 
 	check, err := r.IsModerator(ctx, communityID, userID)
 	if err != nil {
@@ -646,7 +646,7 @@ func (r *CommunityRepository) GetReportByID(ctx context.Context, userID uuid.UUI
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) IsBannedFromCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID) (*bool, error) {
+func (r *CommunityRepository) IsBannedFromCommunity(ctx context.Context, userID string, communityID uuid.UUID) (*bool, error) {
 
 	stmt := `
 		SELECT EXISTS (
@@ -678,12 +678,12 @@ func (r *CommunityRepository) IsBannedFromCommunity(ctx context.Context, userID 
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) IsModerator(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*bool, error) {
+func (r *CommunityRepository) IsModerator(ctx context.Context, communityID uuid.UUID, userID string) (*bool, error) {
 	stmt := `
 		SELECT EXISTS(
 			SELECT 1
 			FROM community_members cm
-			WHERE cm.id = @community_id
+			WHERE cm.community_id = @community_id
 			AND cm.user_id = @user_id
 			AND role IN ('admin', 'moderator')
 		)
@@ -705,12 +705,12 @@ func (r *CommunityRepository) IsModerator(ctx context.Context, communityID uuid.
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) IsAdmin(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*bool, error) {
+func (r *CommunityRepository) IsAdmin(ctx context.Context, communityID uuid.UUID, userID string) (*bool, error) {
 	stmt := `
 		SELECT EXISTS(
 			SELECT 1
 			FROM community_members cm
-			WHERE cm.id = @community_id
+			WHERE cm.community_id = @community_id
 			AND cm.user_id = @user_id
 			AND role = 'admin'
 		)
@@ -730,7 +730,7 @@ func (r *CommunityRepository) IsAdmin(ctx context.Context, communityID uuid.UUID
 	return &check, nil
 }
 
-func (r *CommunityRepository) IsMember(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*bool, error) {
+func (r *CommunityRepository) IsMember(ctx context.Context, communityID uuid.UUID, userID string) (*bool, error) {
 	stmt := `
 		SELECT EXISTS(
 			SELECT 1 FROM community_members WHERE community_id = @community_id AND user_id = @user_id
@@ -751,7 +751,7 @@ func (r *CommunityRepository) IsMember(ctx context.Context, communityID uuid.UUI
 	return &check, nil
 }
 
-func (r *CommunityRepository) GetUserRole(ctx context.Context, communityID uuid.UUID, userID uuid.UUID) (*community.CommunityRole, error) {
+func (r *CommunityRepository) GetUserRole(ctx context.Context, communityID uuid.UUID, userID string) (*community.CommunityRole, error) {
 	stmt := `
 		SELECT role FROM community_members
 		WHERE community_id = @community_id AND user_id = @user_id
@@ -886,7 +886,34 @@ func (r *CommunityRepository) GetCommunities(ctx context.Context, query *communi
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) JoinCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID) (*community.CommunityMember, error) {
+func (r *CommunityRepository) GetCommunityByID(ctx context.Context, communityID uuid.UUID) (*community.Community, error) {
+	return r.getCommunity(ctx, "id", communityID)
+}
+
+func (r *CommunityRepository) GetCommunityBySlug(ctx context.Context, slug string) (*community.Community, error) {
+	return r.getCommunity(ctx, "slug", slug)
+}
+
+func (r *CommunityRepository) getCommunity(ctx context.Context, column string, value any) (*community.Community, error) {
+	stmt := fmt.Sprintf(`SELECT * FROM communities WHERE %s = @value`, column)
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{"value": value})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query community by %s: %w", column, err)
+	}
+	defer rows.Close()
+
+	com, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[community.Community])
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan community by %s %v: %w", column, value, err)
+	}
+
+	return &com, nil
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+func (r *CommunityRepository) JoinCommunity(ctx context.Context, userID string, communityID uuid.UUID) (*community.CommunityMember, error) {
 
 	banned, err := r.IsBannedFromCommunity(ctx, userID, communityID)
 	if err != nil {
@@ -949,7 +976,7 @@ func (r *CommunityRepository) JoinCommunity(ctx context.Context, userID uuid.UUI
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-func (r *CommunityRepository) LeaveCommunity(ctx context.Context, userID uuid.UUID, communityID uuid.UUID) error {
+func (r *CommunityRepository) LeaveCommunity(ctx context.Context, userID string, communityID uuid.UUID) error {
 
 	isAdmin, err := r.IsAdmin(ctx, communityID, userID)
 	if err != nil {
@@ -960,7 +987,13 @@ func (r *CommunityRepository) LeaveCommunity(ctx context.Context, userID uuid.UU
 		return errs.NewBadRequestError("admin must transfer ownership before leaving the community", false, &code, nil, nil)
 	}
 
-	result, err := r.server.DB.Pool.Exec(ctx, `
+	tx, err := r.server.DB.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	result, err := tx.Exec(ctx, `
 		DELETE FROM community_members
 		WHERE user_id = @user_id AND community_id = @community_id
 	`, pgx.NamedArgs{
@@ -973,6 +1006,22 @@ func (r *CommunityRepository) LeaveCommunity(ctx context.Context, userID uuid.UU
 	if result.RowsAffected() == 0 {
 		code := "NOT_A_MEMBER"
 		return errs.NewNotFoundError("not a member of this community", false, &code)
+	}
+
+	// Joining auto-creates a follow (see JoinCommunity); leaving should undo both.
+	_, err = tx.Exec(ctx, `
+		DELETE FROM community_follows
+		WHERE follower_id = @user_id AND community_id = @community_id
+	`, pgx.NamedArgs{
+		"user_id":      userID,
+		"community_id": communityID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to remove follow on leave: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	return nil
 }

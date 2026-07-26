@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: nexus
+      POSTGRES_DB: nexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - nexus_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - nexus_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NEXUS_PRIMARY.ENV: local
+      NEXUS_SERVER.PORT: "8080"
+      NEXUS_SERVER.READ_TIMEOUT: "10"
+      NEXUS_SERVER.WRITE_TIMEOUT: "10"
+      NEXUS_SERVER.IDLE_TIMEOUT: "60"
+      NEXUS_SERVER.CORS_ALLOWED_ORIGINS: http://localhost:3000
+      NEXUS_DATABASE.HOST: postgres
+      NEXUS_DATABASE.PORT: "5432"
+      NEXUS_DATABASE.USER: nexus
+      NEXUS_DATABASE.PASSWORD: nexus
+      NEXUS_DATABASE.NAME: nexus
+      NEXUS_DATABASE.SSL_MODE: disable
+      NEXUS_DATABASE.MAX_OPEN_CONNS: "20"
+      NEXUS_DATABASE.MAX_IDLE_CONNS: "5"
+      NEXUS_DATABASE.CONN_MAX_LIFETIME: "300"
+      NEXUS_DATABASE.CONN_MAX_IDLE_TIME: "60"
+      NEXUS_REDIS.ADDRESS: redis:6379
+      NEXUS_AUTH.SECRET_KEY: ${CLERK_SECRET_KEY:?Set CLERK_SECRET_KEY in your .env}
+      NEXUS_AUTH.WEBHOOK_SECRET: ${CLERK_WEBHOOK_SECRET:?Set CLERK_WEBHOOK_SECRET in your .env}
+      NEXUS_INTEGRATION.RESEND_API_KEY: ${RESEND_API_KEY:?Set RESEND_API_KEY in your .env}
+      NEXUS_OBSERVABILITY.SERVICE_NAME: nexus
+      NEXUS_OBSERVABILITY.ENVIRONMENT: development
+      NEXUS_OBSERVABILITY.LOGGING.LEVEL: debug
+      NEXUS_OBSERVABILITY.LOGGING.FORMAT: console
+      NEXUS_OBSERVABILITY.LOGGING.SLOW_QUERY_THRESHOLD: 100ms
+      NEXUS_OBSERVABILITY.NEW_RELIC.LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:-}
+      NEXUS_OBSERVABILITY.NEW_RELIC.APP_LOG_FORWARDING_ENABLED: "true"
+      NEXUS_OBSERVABILITY.NEW_RELIC.DISTRIBUTED_TRACING_ENABLED: "true"
+      NEXUS_OBSERVABILITY.NEW_RELIC.DEBUG_LOGGING: "false"
+      NEXUS_OBSERVABILITY.HEALTH_CHECKS.ENABLED: "true"
+      NEXUS_OBSERVABILITY.HEALTH_CHECKS.INTERVAL: 30s
+      NEXUS_OBSERVABILITY.HEALTH_CHECKS.TIMEOUT: 5s
+
+volumes:
+  nexus_postgres_data:
+  nexus_redis_data:

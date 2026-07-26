@@ -11,7 +11,8 @@ import (
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type FollowCommunityPayload struct {
-	CommunityID uuid.UUID `json:"communityId" validate:"required,uuid"`
+	// CommunityID is sourced from the :id path param by the handler, not the body.
+	CommunityID uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
 }
 
 func (p *FollowCommunityPayload) Validate() error {
@@ -22,7 +23,8 @@ func (p *FollowCommunityPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type UnFollowCommunityPayload struct {
-	ID uuid.UUID `json:"id" validate:"required,uuid"`
+	// CommunityID is sourced from the :id path param by the handler, not the body.
+	CommunityID uuid.UUID `json:"id" validate:"omitempty,uuid"`
 }
 
 func (p *UnFollowCommunityPayload) Validate() error {
@@ -33,7 +35,8 @@ func (p *UnFollowCommunityPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type FollowUserPayload struct {
-	FollowingID uuid.UUID `json:"followingId" validate:"required,uuid"`
+	// FollowingID is sourced from the :id path param by the handler, not the body.
+	FollowingID string `json:"followingId" validate:"omitempty"`
 }
 
 func (p *FollowUserPayload) Validate() error {
@@ -44,7 +47,8 @@ func (p *FollowUserPayload) Validate() error {
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type UnFollowUserPayload struct {
-	FollowingID uuid.UUID `json:"followingId" validate:"required,uuid"`
+	// FollowingID is sourced from the :id path param by the handler, not the body.
+	FollowingID string `json:"followingId" validate:"omitempty"`
 }
 
 func (p *UnFollowUserPayload) Validate() error {

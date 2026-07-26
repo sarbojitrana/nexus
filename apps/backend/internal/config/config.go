@@ -1,3 +1,4 @@
+
 package config
 
 import (
@@ -47,6 +48,7 @@ type DatabaseConfig struct {
 
 type AuthConfig struct {
 	SecretKey 		string `koanf:"secret_key" validate:"required"`
+	WebhookSecret	string `koanf:"webhook_secret" validate:"required"`
 }
 
 type RedisConfig struct{
@@ -75,6 +77,13 @@ func LoadConfig() (*Config, error){
 	mainConfig := &Config{}
 
 	err = k.Unmarshal("", mainConfig)
+
+	// Platform-assigned port (Render, Heroku, Railway, ...) takes priority
+	// over NEXUS_SERVER_PORT -- these platforms route traffic only to the
+	// port they dynamically assign via PORT.
+	if platformPort := os.Getenv("PORT"); platformPort != "" {
+		mainConfig.Server.Port = platformPort
+	}
 
 	validate := validator.New()
 
