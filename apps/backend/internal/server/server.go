@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/newrelic/go-agent/v3/integrations/nrredis-v9"
@@ -19,6 +20,17 @@ import (
 	"github.com/sarbojitrana/nexus/internal/search"
 	"github.com/sarbojitrana/nexus/internal/storage"
 )
+
+// parseRedisAddress accepts either a bare "host:port" (local dev,
+// docker-compose) or a full "redis://[:password@]host:port" URL (Render's
+// Key Value connectionString) -- go-redis's Options.Addr only understands
+// the former, so a full URL needs to go through ParseURL instead.
+func parseRedisAddress(address string) (*redis.Options, error) {
+	if strings.Contains(address, "://") {
+		return redis.ParseURL(address)
+	}
+	return &redis.Options{Addr: address}, nil
+}
 
 type Server struct {
 	Config        *config.Config
@@ -41,9 +53,11 @@ func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerPkg.Lo
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: cfg.Redis.Address,
-	})
+	redisOpts, err := parseRedisAddress(cfg.Redis.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse redis address: %w", err)
+	}
+	redisClient := redis.NewClient(redisOpts)
 
 	if loggerService != nil && loggerService.GetApplication() != nil {
 		redisClient.AddHook(nrredis.NewHook(redisClient.Options()))
