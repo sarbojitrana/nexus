@@ -35,8 +35,9 @@ export const ZPost = z.object({
 export const ZPopulatedPost = ZPost.extend({
   postMedia: z.array(ZPostMedia),
 });
+export type PopulatedPost = z.infer<typeof ZPopulatedPost>;
+export type Post = z.infer<typeof ZPost>;
 
-// parentPostId requires postType "comment" and vice versa
 export const ZCreatePostPayload = z.object({
   communityId: z.string().uuid().nullable().optional(),
   parentPostId: z.string().uuid().nullable().optional(),

@@ -19,12 +19,10 @@ func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services
 
 	router.HTTPErrorHandler = middlewares.Global.GlobalErrorHandler
 
-	//global middlewares
 	router.Use(
 		echoMiddleware.RateLimiterWithConfig(echoMiddleware.RateLimiterConfig{
 			Store: echoMiddleware.NewRateLimiterMemoryStore(rate.Limit(20)),
 			DenyHandler: func(c echo.Context, identifier string, err error) error {
-				// Record rate limit hit metrics
 				if rateLimitMiddleware := middlewares.RateLimit; rateLimitMiddleware != nil {
 					rateLimitMiddleware.RecordRateLimitHit(c.Path())
 				}
@@ -50,18 +48,21 @@ func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services
 		middlewares.Global.Recover(),
 	)
 
-	// register system routes
 	registerSystemRoutes(router, h)
 
-	// register webhook routes
 	registerWebhookRoutes(router, h)
 
-	// register versioned routes
+	registerChatWebSocketRoute(router, h)
+
 	v1 := router.Group("/api/v1")
 	registerUserRoutes(v1, h, middlewares)
 	registerPostRoutes(v1, h, middlewares)
 	registerCommunityRoutes(v1, h, middlewares)
 	registerFollowRoutes(v1, h, middlewares)
+	registerChatRoutes(v1, h, middlewares)
+	registerNotificationRoutes(v1, h, middlewares)
+	registerSearchRoutes(v1, h, middlewares)
+	registerStorageRoutes(v1, h, middlewares)
 
 	return router
 

@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	clerkEventUserCreated = "user.created"
-	clerkEventUserUpdated = "user.updated"
-	clerkEventUserDeleted = "user.deleted"
+	clerkEventUserCreated    = "user.created"
+	clerkEventUserUpdated    = "user.updated"
+	clerkEventUserDeleted    = "user.deleted"
+	clerkEventSessionCreated = "session.created"
 )
 
 type clerkWebhookEvent struct {
@@ -46,9 +47,6 @@ func NewClerkWebhookHandler(s *server.Server, services *service.Services) *Clerk
 	}
 }
 
-// HandleClerkWebhook processes Clerk user lifecycle events. It bypasses the
-// generic Handle wrapper because the raw request body is needed, unconsumed,
-// to verify the svix signature before it can be parsed.
 func (h *ClerkWebhookHandler) HandleClerkWebhook(c echo.Context) error {
 	logger := middleware.GetLogger(c)
 
@@ -119,6 +117,15 @@ func (h *ClerkWebhookHandler) HandleClerkWebhook(c echo.Context) error {
 		}
 
 		logger.Info().Str("clerk_user_id", payload.ID).Msg("synced user.deleted from clerk")
+
+	case clerkEventSessionCreated:
+		var sess clerk.Session
+		if err := json.Unmarshal(event.Data, &sess); err != nil {
+			logger.Error().Err(err).Msg("failed to parse clerk session.created payload")
+			return errs.NewBadRequestError("malformed webhook payload", false, nil, nil, nil)
+		}
+
+		h.services.User.NotifySignIn(ctx, sess.UserID)
 
 	default:
 		logger.Debug().Str("event_type", event.Type).Msg("ignoring unhandled clerk webhook event")

@@ -9,18 +9,40 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model"
 	"github.com/sarbojitrana/nexus/internal/model/post"
 	"github.com/sarbojitrana/nexus/internal/repository"
+	"github.com/sarbojitrana/nexus/internal/search"
 	"github.com/sarbojitrana/nexus/internal/server"
 )
 
 type PostService struct {
 	server *server.Server
 	repo   *repository.PostRepository
+	search *search.Client
 }
 
-func NewPostService(s *server.Server, repo *repository.PostRepository) *PostService {
+func NewPostService(s *server.Server, repo *repository.PostRepository, search *search.Client) *PostService {
 	return &PostService{
 		server: s,
 		repo:   repo,
+		search: search,
+	}
+}
+
+func (s *PostService) indexPost(ctx context.Context, p *post.Post) {
+	if s.search == nil || p.PostType != post.PostTypePost {
+		return
+	}
+	doc := search.PostDoc{
+		ID:           p.ID,
+		AuthorID:     p.AuthorID,
+		CommunityID:  p.CommunityID,
+		Title:        p.Title,
+		Content:      p.Content,
+		Upvotes:      p.Upvotes,
+		CommentCount: p.CommentCount,
+		CreatedAt:    p.CreatedAt,
+	}
+	if err := s.search.IndexPost(ctx, doc); err != nil {
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("post_id", p.ID.String()).Msg("failed to index post")
 	}
 }
 
@@ -34,6 +56,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, payload *po
 	}
 
 	logger.Info().Str("event", "post_created").Str("post_id", created.ID.String()).Str("user_id", userID).Msg("post created")
+	s.indexPost(ctx, created)
 	return created, nil
 }
 
@@ -47,6 +70,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID string, postID uuid
 	}
 
 	logger.Info().Str("event", "post_updated").Str("post_id", postID.String()).Str("user_id", userID).Msg("post updated")
+	s.indexPost(ctx, updated)
 	return updated, nil
 }
 
@@ -59,6 +83,13 @@ func (s *PostService) DeletePost(ctx context.Context, userID string, postID uuid
 	}
 
 	logger.Info().Str("event", "post_deleted").Str("post_id", postID.String()).Str("user_id", userID).Msg("post deleted")
+
+	if s.search != nil {
+		if err := s.search.DeletePost(ctx, postID); err != nil {
+			logger.Error().Err(err).Str("post_id", postID.String()).Msg("failed to remove post from search index")
+		}
+	}
+
 	return nil
 }
 

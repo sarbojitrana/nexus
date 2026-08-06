@@ -34,14 +34,15 @@ const (
 
 type Community struct {
 	model.Base
-	AdminID      string  `json:"adminId" db:"admin_id"`
-	Name         string  `json:"name" db:"name"`
-	Slug         string  `json:"slug" db:"slug"`
-	Description  *string `json:"description" db:"description"`
-	AvatarKey    *string `json:"avatarKey" db:"avatar_key"`
-	BannerKey    *string `json:"bannerKey" db:"banner_key"`
-	MembersCount int     `json:"membersCount" db:"members_count"`
-	PostsCount   int     `json:"postsCount" db:"posts_count"`
+	AdminID      string          `json:"adminId" db:"admin_id"`
+	Name         string          `json:"name" db:"name"`
+	Slug         string          `json:"slug" db:"slug"`
+	Description  *string         `json:"description" db:"description"`
+	AvatarKey    *string         `json:"avatarKey" db:"avatar_key"`
+	BannerKey    *string         `json:"bannerKey" db:"banner_key"`
+	MembersCount int             `json:"membersCount" db:"members_count"`
+	PostsCount   int             `json:"postsCount" db:"posts_count"`
+	CanPost      *PostPermission `json:"canPost" db:"can_post"`
 }
 
 type CommunityMember struct {

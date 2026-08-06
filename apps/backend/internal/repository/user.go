@@ -76,8 +76,6 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 	return &userItem, nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 func (r *UserRepository) UpdateUser(ctx context.Context, userID string, payload *user.UpdateUserPayload) (*user.User, error) {
 	stmt := `
 		UPDATE users SET 
@@ -136,7 +134,51 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID string, payload 
 	return &updatedUser, nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+func (r *UserRepository) UpdateUserSettings(ctx context.Context, userID string, payload *user.UpdateUserSettingsPayload) (*user.User, error) {
+	stmt := `UPDATE users SET `
+	args := pgx.NamedArgs{"user_id": userID}
+	setClauses := []string{}
+
+	if payload.ProfileVisibility != nil {
+		setClauses = append(setClauses, "profile_visibility = @profile_visibility")
+		args["profile_visibility"] = payload.ProfileVisibility
+	}
+
+	if payload.ShowOnlineStatus != nil {
+		setClauses = append(setClauses, "show_online_status = @show_online_status")
+		args["show_online_status"] = payload.ShowOnlineStatus
+	}
+
+	if payload.GroupInvitePermission != nil {
+		setClauses = append(setClauses, "group_invite_permission = @group_invite_permission")
+		args["group_invite_permission"] = payload.GroupInvitePermission
+	}
+
+	if payload.ShareReadReceipts != nil {
+		setClauses = append(setClauses, "share_read_receipts = @share_read_receipts")
+		args["share_read_receipts"] = payload.ShareReadReceipts
+	}
+
+	if len(setClauses) == 0 {
+		return nil, errs.NewBadRequestError("No field provided to be updated", false, nil, nil, nil)
+	}
+
+	stmt += strings.Join(setClauses, ", ")
+	stmt += " WHERE id = @user_id RETURNING *"
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute settings update for user_id %s: %w", userID, err)
+	}
+	defer rows.Close()
+
+	updatedUser, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[user.User])
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan updated user settings for user_id %s: %w", userID, err)
+	}
+
+	return &updatedUser, nil
+}
 
 func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *string, userID string) (*user.User, error) {
 
@@ -170,8 +212,6 @@ func (r *UserRepository) GetUserByID(ctx context.Context, viewerID *string, user
 
 	return &user, nil
 }
-
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *string, profileUserID string, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	stmt := `
@@ -350,8 +390,6 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *string,
 
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 func (r *UserRepository) GetUsers(ctx context.Context, viewerID *string, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
@@ -483,8 +521,6 @@ func (r *UserRepository) GetUsers(ctx context.Context, viewerID *string, payload
 	}, nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 func (r *UserRepository) DeleteUser(ctx context.Context, userID string) error {
 	stmt := `
 		DELETE FROM users
@@ -507,10 +543,6 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-// UpdateUserEmail syncs a user's email from Clerk. Kept separate from UpdateUser
-// since email is not part of the user-facing profile update payload.
 func (r *UserRepository) UpdateUserEmail(ctx context.Context, userID string, email string) (*user.User, error) {
 	stmt := `UPDATE users SET email_id = @email_id WHERE id = @user_id RETURNING *`
 
@@ -533,8 +565,6 @@ func (r *UserRepository) UpdateUserEmail(ctx context.Context, userID string, ema
 
 	return &updatedUser, nil
 }
-
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 func (r *UserRepository) IsUserBlocked(ctx context.Context, userID string, blockerID string) (*bool, error) {
 

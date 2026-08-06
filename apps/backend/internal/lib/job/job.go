@@ -12,8 +12,6 @@ type JobService struct { // background task queue
 	logger *zerolog.Logger
 }
 
-// using dependency injection
-
 func NewJobService(logger *zerolog.Logger, cfg *config.Config) *JobService {
 	redisAddr := cfg.Redis.Address
 
@@ -45,6 +43,8 @@ func NewJobService(logger *zerolog.Logger, cfg *config.Config) *JobService {
 func (j *JobService) Start() error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(TaskWelcome, j.handleWelcomeEmailTask) // when a task TaskWelcome is pulled from Redis, call handleWelcomeEmailTask
+	mux.HandleFunc(TaskSignIn, j.handleSignInEmailTask)
+	mux.HandleFunc(TaskPasswordChanged, j.handlePasswordChangedEmailTask)
 	j.logger.Info().Msg("Starting background job server")
 	if err := j.server.Start(mux); err != nil {
 		return err

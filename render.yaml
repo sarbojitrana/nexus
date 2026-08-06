@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./apps/backend/Dockerfile
     dockerContext: ./apps/backend
-    plan: starter
+    plan: free
     region: oregon
     healthCheckPath: /status
     envVars:
@@ -20,30 +20,22 @@ services:
         value: "60"
       - key: NEXUS_SERVER.CORS_ALLOWED_ORIGINS
         sync: false # e.g. https://nexus.vercel.app
+      # External always-free Postgres (e.g. Neon) -- Render's own free
+      # Postgres deletes all data after 30 days, unsuitable for real user data.
       - key: NEXUS_DATABASE.HOST
-        fromDatabase:
-          name: nexus-db
-          property: host
+        sync: false
       - key: NEXUS_DATABASE.PORT
-        fromDatabase:
-          name: nexus-db
-          property: port
+        value: "5432"
       - key: NEXUS_DATABASE.USER
-        fromDatabase:
-          name: nexus-db
-          property: user
+        sync: false
       - key: NEXUS_DATABASE.PASSWORD
-        fromDatabase:
-          name: nexus-db
-          property: password
+        sync: false
       - key: NEXUS_DATABASE.NAME
-        fromDatabase:
-          name: nexus-db
-          property: database
+        sync: false
       - key: NEXUS_DATABASE.SSL_MODE
         value: require
       - key: NEXUS_DATABASE.MAX_OPEN_CONNS
-        value: "20"
+        value: "10"
       - key: NEXUS_DATABASE.MAX_IDLE_CONNS
         value: "5"
       - key: NEXUS_DATABASE.CONN_MAX_LIFETIME
@@ -53,14 +45,22 @@ services:
       - key: NEXUS_REDIS.ADDRESS
         fromService:
           name: nexus-redis
-          type: redis
+          type: keyvalue
           property: connectionString
       - key: NEXUS_AUTH.SECRET_KEY
         sync: false
       - key: NEXUS_AUTH.WEBHOOK_SECRET
         sync: false
-      - key: NEXUS_INTEGRATION.RESEND_API_KEY
-        sync: false
+      - key: NEXUS_INTEGRATION.SMTP_HOST
+        value: smtp.gmail.com
+      - key: NEXUS_INTEGRATION.SMTP_PORT
+        value: "587"
+      - key: NEXUS_INTEGRATION.SMTP_USERNAME
+        sync: false # your Gmail address
+      - key: NEXUS_INTEGRATION.SMTP_PASSWORD
+        sync: false # Gmail App Password, not your account password
+      - key: NEXUS_INTEGRATION.SMTP_FROM
+        sync: false # e.g. "Nexus <your.address@gmail.com>"
       - key: NEXUS_OBSERVABILITY.SERVICE_NAME
         value: nexus
       - key: NEXUS_OBSERVABILITY.ENVIRONMENT
@@ -85,14 +85,30 @@ services:
         value: 30s
       - key: NEXUS_OBSERVABILITY.HEALTH_CHECKS.TIMEOUT
         value: 5s
+      # S3-compatible object storage for chat attachments (Cloudflare R2 --
+      # free forever, zero egress). Uploads stay disabled until these are set.
+      - key: NEXUS_AWS.REGION
+        sync: false # e.g. auto
+      - key: NEXUS_AWS.ACCESS_KEY_ID
+        sync: false
+      - key: NEXUS_AWS.SECRET_ACCESS_KEY
+        sync: false
+      - key: NEXUS_AWS.ENDPOINT_URL
+        sync: false # e.g. https://<account_id>.r2.cloudflarestorage.com
+      - key: NEXUS_AWS.UPLOAD_BUCKET
+        sync: false
+      # OpenSearch for post/people/community search (Bonsai free Sandbox
+      # plan -- free forever). Search stays disabled until this is set.
+      - key: NEXUS_SEARCH.URL
+        sync: false # e.g. https://<cluster>.a.bonsaisearch.net
+      - key: NEXUS_SEARCH.USERNAME
+        sync: false
+      - key: NEXUS_SEARCH.PASSWORD
+        sync: false
 
-  - type: redis
+  - type: keyvalue
     name: nexus-redis
-    plan: starter
+    plan: free
     region: oregon
+    maxmemoryPolicy: allkeys-lru
     ipAllowList: []
-
-databases:
-  - name: nexus-db
-    plan: starter
-    region: oregon

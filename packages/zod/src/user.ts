@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { ZOrder } from "@/utils.js";
 
+export const ZProfileVisibility = z.enum(["public", "followers_only", "private"]);
+export const ZGroupInvitePermission = z.enum(["everyone", "followers_only", "no_one"]);
+
 export const ZUser = z.object({
   id: z.string(),
   username: z.string(),
@@ -12,8 +15,20 @@ export const ZUser = z.object({
   followerCount: z.number(),
   followingCount: z.number(),
   postsCount: z.number(),
+  profileVisibility: ZProfileVisibility,
+  showOnlineStatus: z.boolean(),
+  groupInvitePermission: ZGroupInvitePermission,
+  shareReadReceipts: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+});
+export type User = z.infer<typeof ZUser>;
+
+export const ZUpdateUserSettingsPayload = z.object({
+  profileVisibility: ZProfileVisibility.optional(),
+  showOnlineStatus: z.boolean().optional(),
+  groupInvitePermission: ZGroupInvitePermission.optional(),
+  shareReadReceipts: z.boolean().optional(),
 });
 
 export const ZMiniUser = z.object({
@@ -25,6 +40,7 @@ export const ZMiniUser = z.object({
   followerCount: z.number(),
   createdAt: z.string().datetime(),
 });
+export type MiniUser = z.infer<typeof ZMiniUser>;
 
 export const ZUpdateUserPayload = z.object({
   username: z.string().max(50).nullable().optional(),

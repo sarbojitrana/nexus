@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ZOrder, schemaWithCursorPagination } from "@/utils.js";
 
 export const ZCommunityRole = z.enum(["member", "moderator", "admin"]);
+export const ZPostPermission = z.enum(["all", "moderator"]);
 export const ZCommunityReportStatus = z.enum([
   "pending",
   "resolved",
@@ -20,11 +21,14 @@ export const ZCommunity = z.object({
   bannerKey: z.string().nullable(),
   membersCount: z.number(),
   postsCount: z.number(),
+  canPost: ZPostPermission.nullable(),
 });
 
 export const ZCommunityResponse = ZCommunity.extend({
   viewerRole: ZCommunityRole.nullable(),
 });
+export type Community = z.infer<typeof ZCommunity>;
+export type CommunityResponse = z.infer<typeof ZCommunityResponse>;
 
 export const ZCommunityMember = z.object({
   userId: z.string(),
@@ -43,6 +47,7 @@ export const ZMiniCommunity = z.object({
   postsCount: z.number(),
   createdAt: z.string().datetime(),
 });
+export type MiniCommunity = z.infer<typeof ZMiniCommunity>;
 
 export const ZMiniCommunityUser = z.object({
   userId: z.string(),

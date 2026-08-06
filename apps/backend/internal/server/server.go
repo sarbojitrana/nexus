@@ -10,10 +10,14 @@ import (
 	"github.com/newrelic/go-agent/v3/integrations/nrredis-v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
+	"github.com/sarbojitrana/nexus/internal/cache"
 	"github.com/sarbojitrana/nexus/internal/config"
 	"github.com/sarbojitrana/nexus/internal/database"
 	"github.com/sarbojitrana/nexus/internal/lib/job"
+	"github.com/sarbojitrana/nexus/internal/lib/ws"
 	loggerPkg "github.com/sarbojitrana/nexus/internal/logger"
+	"github.com/sarbojitrana/nexus/internal/search"
+	"github.com/sarbojitrana/nexus/internal/storage"
 )
 
 type Server struct {
@@ -24,6 +28,10 @@ type Server struct {
 	Redis         *redis.Client
 	httpServer    *http.Server
 	Job           *job.JobService
+	Search        *search.Client
+	Storage       *storage.Client
+	Hub           *ws.Hub
+	Cache         *cache.Client
 }
 
 func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerPkg.LoggerService) (*Server, error) {
@@ -37,20 +45,15 @@ func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerPkg.Lo
 		Addr: cfg.Redis.Address,
 	})
 
-	//Add New Relic Redis hooks if available
-
 	if loggerService != nil && loggerService.GetApplication() != nil {
 		redisClient.AddHook(nrredis.NewHook(redisClient.Options()))
 	}
-
-	// Test Redis connection
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		logger.Error().Err(err).Msg("failed to connect to Redis, continuing without Redis")
-		// Don't fail startup if Redis is unavailable
 	}
 
 	jobService := job.NewJobService(logger, cfg)
@@ -60,6 +63,17 @@ func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerPkg.Lo
 		return nil, err
 	}
 
+	initCtx, initCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer initCancel()
+
+	searchClient := search.NewClient(initCtx, cfg, logger)
+
+	storageClient, err := storage.NewClient(initCtx, cfg)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to initialize storage client, uploads disabled")
+		storageClient = nil
+	}
+
 	server := &Server{
 		Config:        cfg,
 		Logger:        logger,
@@ -67,10 +81,11 @@ func New(cfg *config.Config, logger *zerolog.Logger, loggerService *loggerPkg.Lo
 		DB:            db,
 		Redis:         redisClient,
 		Job:           jobService,
+		Search:        searchClient,
+		Storage:       storageClient,
+		Hub:           ws.NewHub(logger),
+		Cache:         cache.NewClient(redisClient, logger),
 	}
-
-	// Start metrics collection
-	// Runtime metrics are automatically collected by New Relic Go agent
 
 	return server, nil
 

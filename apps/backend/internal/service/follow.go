@@ -8,20 +8,23 @@ import (
 	"github.com/sarbojitrana/nexus/internal/middleware"
 	"github.com/sarbojitrana/nexus/internal/model"
 	"github.com/sarbojitrana/nexus/internal/model/follow"
+	"github.com/sarbojitrana/nexus/internal/model/notification"
 	"github.com/sarbojitrana/nexus/internal/model/user"
 	"github.com/sarbojitrana/nexus/internal/repository"
 	"github.com/sarbojitrana/nexus/internal/server"
 )
 
 type FollowService struct {
-	server *server.Server
-	repo   *repository.FollowRepository
+	server        *server.Server
+	repo          *repository.FollowRepository
+	notifications *NotificationService
 }
 
-func NewFollowService(s *server.Server, repo *repository.FollowRepository) *FollowService {
+func NewFollowService(s *server.Server, repo *repository.FollowRepository, notifications *NotificationService) *FollowService {
 	return &FollowService{
-		server: s,
-		repo:   repo,
+		server:        s,
+		repo:          repo,
+		notifications: notifications,
 	}
 }
 
@@ -69,6 +72,7 @@ func (s *FollowService) FollowUser(ctx context.Context, userID string, payload *
 	}
 
 	logger.Info().Str("event", "user_followed").Str("following_id", payload.FollowingID).Str("user_id", userID).Msg("user followed another user")
+	s.notifications.Notify(ctx, payload.FollowingID, &userID, notification.TypeFollow, map[string]string{"followerId": userID})
 	return f, nil
 }
 

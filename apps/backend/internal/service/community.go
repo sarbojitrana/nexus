@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -10,18 +12,43 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model/community"
 	"github.com/sarbojitrana/nexus/internal/model/post"
 	"github.com/sarbojitrana/nexus/internal/repository"
+	"github.com/sarbojitrana/nexus/internal/search"
 	"github.com/sarbojitrana/nexus/internal/server"
 )
+
+const communityCacheTTL = 60 * time.Second
+
+func communityCacheKeyByID(id uuid.UUID) string  { return fmt.Sprintf("cache:community:id:%s", id) }
+func communityCacheKeyBySlug(slug string) string { return fmt.Sprintf("cache:community:slug:%s", slug) }
 
 type CommunityService struct {
 	server *server.Server
 	repo   *repository.CommunityRepository
+	search *search.Client
 }
 
-func NewCommunityService(s *server.Server, repo *repository.CommunityRepository) *CommunityService {
+func NewCommunityService(s *server.Server, repo *repository.CommunityRepository, search *search.Client) *CommunityService {
 	return &CommunityService{
 		server: s,
 		repo:   repo,
+		search: search,
+	}
+}
+
+func (s *CommunityService) indexCommunity(ctx context.Context, c *community.Community) {
+	if s.search == nil {
+		return
+	}
+	doc := search.CommunityDoc{
+		ID:           c.ID,
+		Name:         c.Name,
+		Slug:         c.Slug,
+		Description:  c.Description,
+		MembersCount: c.MembersCount,
+		CreatedAt:    c.CreatedAt,
+	}
+	if err := s.search.IndexCommunity(ctx, doc); err != nil {
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("community_id", c.ID.String()).Msg("failed to index community")
 	}
 }
 
@@ -37,6 +64,7 @@ func (s *CommunityService) CreateCommunity(ctx context.Context, adminID string, 
 	}
 
 	logger.Info().Str("event", "community_created").Str("community_id", created.ID.String()).Str("admin_id", adminID).Msg("community created")
+	s.indexCommunity(ctx, created)
 	return created, nil
 }
 
@@ -49,23 +77,40 @@ func (s *CommunityService) GetCommunities(ctx context.Context, query *community.
 	return res, nil
 }
 
-// GetByID composes a CommunityResponse with the viewer's role, when known.
 func (s *CommunityService) GetByID(ctx context.Context, viewerID *string, communityID uuid.UUID) (*community.CommunityResponse, error) {
-	com, err := s.repo.GetCommunityByID(ctx, communityID)
+	cacheKey := communityCacheKeyByID(communityID)
+
+	var com community.Community
+	if s.server.Cache.Get(ctx, cacheKey, &com) {
+		return s.withViewerRole(ctx, viewerID, &com)
+	}
+
+	fetched, err := s.repo.GetCommunityByID(ctx, communityID)
 	if err != nil {
 		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("community_id", communityID.String()).Msg("failed to fetch community")
 		return nil, err
 	}
-	return s.withViewerRole(ctx, viewerID, com)
+
+	s.server.Cache.Set(ctx, cacheKey, fetched, communityCacheTTL)
+	return s.withViewerRole(ctx, viewerID, fetched)
 }
 
 func (s *CommunityService) GetBySlug(ctx context.Context, viewerID *string, slug string) (*community.CommunityResponse, error) {
-	com, err := s.repo.GetCommunityBySlug(ctx, slug)
+	cacheKey := communityCacheKeyBySlug(slug)
+
+	var com community.Community
+	if s.server.Cache.Get(ctx, cacheKey, &com) {
+		return s.withViewerRole(ctx, viewerID, &com)
+	}
+
+	fetched, err := s.repo.GetCommunityBySlug(ctx, slug)
 	if err != nil {
 		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("slug", slug).Msg("failed to fetch community")
 		return nil, err
 	}
-	return s.withViewerRole(ctx, viewerID, com)
+
+	s.server.Cache.Set(ctx, cacheKey, fetched, communityCacheTTL)
+	return s.withViewerRole(ctx, viewerID, fetched)
 }
 
 func (s *CommunityService) withViewerRole(ctx context.Context, viewerID *string, com *community.Community) (*community.CommunityResponse, error) {
@@ -95,6 +140,10 @@ func (s *CommunityService) UpdateSettings(ctx context.Context, userID string, co
 	}
 
 	logger.Info().Str("event", "community_settings_updated").Str("community_id", communityID.String()).Str("user_id", userID).Msg("community settings updated")
+	s.indexCommunity(ctx, updated)
+
+	s.server.Cache.Delete(ctx, communityCacheKeyByID(communityID), communityCacheKeyBySlug(updated.Slug))
+
 	return updated, nil
 }
 
@@ -107,6 +156,15 @@ func (s *CommunityService) DeleteCommunity(ctx context.Context, userID string, c
 	}
 
 	logger.Info().Str("event", "community_deleted").Str("community_id", communityID.String()).Str("user_id", userID).Msg("community deleted")
+
+	s.server.Cache.Delete(ctx, communityCacheKeyByID(communityID))
+
+	if s.search != nil {
+		if err := s.search.DeleteCommunity(ctx, communityID); err != nil {
+			logger.Error().Err(err).Str("community_id", communityID.String()).Msg("failed to remove community from search index")
+		}
+	}
+
 	return nil
 }
 

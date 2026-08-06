@@ -44,3 +44,51 @@ func (j *JobService) handleWelcomeEmailTask(ctx context.Context, t *asynq.Task) 
 
 	return nil
 }
+
+func (j *JobService) handleSignInEmailTask(ctx context.Context, t *asynq.Task) error {
+	var p SignInEmailPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("failed to unmarshal signin email payload: %w", err)
+	}
+
+	err := emailClient.SendSignInEmail(p.To, p.FirstName, p.SignInTime)
+	if err != nil {
+		j.logger.Error().
+			Str("type", "signin").
+			Str("to", p.To).
+			Err(err).
+			Msg("Failed to send sign-in email")
+		return err
+	}
+
+	j.logger.Info().
+		Str("type", "signin").
+		Str("to", p.To).
+		Msg("Successfully sent sign-in email")
+
+	return nil
+}
+
+func (j *JobService) handlePasswordChangedEmailTask(ctx context.Context, t *asynq.Task) error {
+	var p PasswordChangedEmailPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("failed to unmarshal password changed email payload: %w", err)
+	}
+
+	err := emailClient.SendPasswordChangedEmail(p.To, p.FirstName, p.ChangedAt)
+	if err != nil {
+		j.logger.Error().
+			Str("type", "password_changed").
+			Str("to", p.To).
+			Err(err).
+			Msg("Failed to send password changed email")
+		return err
+	}
+
+	j.logger.Info().
+		Str("type", "password_changed").
+		Str("to", p.To).
+		Msg("Successfully sent password changed email")
+
+	return nil
+}

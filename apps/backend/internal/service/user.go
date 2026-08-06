@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkUser "github.com/clerk/clerk-sdk-go/v2/user"
@@ -16,24 +17,28 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model/post"
 	"github.com/sarbojitrana/nexus/internal/model/user"
 	"github.com/sarbojitrana/nexus/internal/repository"
+	"github.com/sarbojitrana/nexus/internal/search"
 	"github.com/sarbojitrana/nexus/internal/server"
 )
 
+const signInTimeFormat = "Jan 2, 2006, 3:04 PM MST"
+
 type UserService struct {
-	server *server.Server
-	repo   *repository.UserRepository
+	server     *server.Server
+	repo       *repository.UserRepository
+	followRepo *repository.FollowRepository
+	search     *search.Client
 }
 
-func NewUserService(s *server.Server, repo *repository.UserRepository) *UserService {
+func NewUserService(s *server.Server, repo *repository.UserRepository, followRepo *repository.FollowRepository, search *search.Client) *UserService {
 	return &UserService{
-		server: s,
-		repo:   repo,
+		server:     s,
+		repo:       repo,
+		followRepo: followRepo,
+		search:     search,
 	}
 }
 
-// CreateFromClerk provisions a minimal local user row from a Clerk user.created
-// event. It's idempotent so Clerk's at-least-once webhook delivery can't create
-// duplicate rows.
 func (s *UserService) CreateFromClerk(ctx context.Context, cu *clerk.User) (*user.User, error) {
 	logger := middleware.GetLoggerFromContext(ctx)
 
@@ -65,6 +70,7 @@ func (s *UserService) CreateFromClerk(ctx context.Context, cu *clerk.User) (*use
 
 	logger.Info().Str("event", "user_created").Str("user_id", created.UserID).Msg("user created from clerk webhook")
 
+	s.indexUser(ctx, created)
 	s.enqueueWelcomeEmail(ctx, email, displayName)
 
 	return created, nil
@@ -84,8 +90,70 @@ func (s *UserService) enqueueWelcomeEmail(ctx context.Context, email, firstName 
 	}
 }
 
-// UpdateFromClerk syncs the local email copy from a Clerk user.updated event.
-// Email is the only field Clerk stays the source of truth for post-onboarding.
+func (s *UserService) NotifySignIn(ctx context.Context, userID string) {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	u, err := s.repo.GetUserByID(ctx, nil, userID)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to look up user for sign-in email")
+		return
+	}
+
+	task, err := job.NewSignInEmailTask(u.EmailID, u.DisplayName, time.Now().UTC().Format(signInTimeFormat))
+	if err != nil {
+		logger.Error().Err(err).Str("to", u.EmailID).Msg("failed to build sign-in email task")
+		return
+	}
+
+	if _, err := s.server.Job.Client.Enqueue(task); err != nil {
+		logger.Error().Err(err).Str("to", u.EmailID).Msg("failed to enqueue sign-in email task")
+		return
+	}
+
+	logger.Info().Str("event", "signin_email_enqueued").Str("user_id", userID).Msg("sign-in email enqueued")
+}
+
+func (s *UserService) NotifyPasswordChanged(ctx context.Context, userID string) error {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	u, err := s.repo.GetUserByID(ctx, nil, userID)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to look up user for password-changed email")
+		return err
+	}
+
+	task, err := job.NewPasswordChangedEmailTask(u.EmailID, u.DisplayName, time.Now().UTC().Format(signInTimeFormat))
+	if err != nil {
+		logger.Error().Err(err).Str("to", u.EmailID).Msg("failed to build password-changed email task")
+		return err
+	}
+
+	if _, err := s.server.Job.Client.Enqueue(task); err != nil {
+		logger.Error().Err(err).Str("to", u.EmailID).Msg("failed to enqueue password-changed email task")
+		return err
+	}
+
+	logger.Info().Str("event", "password_changed_email_enqueued").Str("user_id", userID).Msg("password-changed email enqueued")
+	return nil
+}
+
+func (s *UserService) indexUser(ctx context.Context, u *user.User) {
+	if s.search == nil {
+		return
+	}
+	doc := search.UserDoc{
+		ID:            u.UserID,
+		Username:      u.Username,
+		DisplayName:   u.DisplayName,
+		Bio:           u.Bio,
+		FollowerCount: u.FollowerCount,
+		CreatedAt:     u.CreatedAt,
+	}
+	if err := s.search.IndexUser(ctx, doc); err != nil {
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("user_id", u.UserID).Msg("failed to index user")
+	}
+}
+
 func (s *UserService) UpdateFromClerk(ctx context.Context, cu *clerk.User) (*user.User, error) {
 	logger := middleware.GetLoggerFromContext(ctx)
 
@@ -105,8 +173,6 @@ func (s *UserService) UpdateFromClerk(ctx context.Context, cu *clerk.User) (*use
 	return updated, nil
 }
 
-// DeleteFromClerk removes the local user row for a Clerk user.deleted event.
-// A missing row is treated as a no-op so redelivered events stay idempotent.
 func (s *UserService) DeleteFromClerk(ctx context.Context, clerkID string) error {
 	logger := middleware.GetLoggerFromContext(ctx)
 
@@ -122,21 +188,60 @@ func (s *UserService) DeleteFromClerk(ctx context.Context, clerkID string) error
 	}
 
 	logger.Info().Str("event", "user_deleted").Str("user_id", clerkID).Msg("user deleted from clerk webhook")
+
+	if s.search != nil {
+		if err := s.search.DeleteUser(ctx, clerkID); err != nil {
+			logger.Error().Err(err).Str("user_id", clerkID).Msg("failed to remove user from search index")
+		}
+	}
+
 	return nil
 }
 
-// GetByID fetches a profile. viewerID, when present, excludes profiles that
-// have blocked (or been blocked by) the viewer.
 func (s *UserService) GetByID(ctx context.Context, viewerID *string, userID string) (*user.User, error) {
+	logger := middleware.GetLoggerFromContext(ctx)
+
 	u, err := s.repo.GetUserByID(ctx, viewerID, userID)
 	if err != nil {
-		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("user_id", userID).Msg("failed to fetch user")
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to fetch user")
 		return nil, err
 	}
+
+	visible, err := s.canViewProfile(ctx, viewerID, u)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to check profile visibility")
+		return nil, err
+	}
+	if !visible {
+		code := "USER_NOT_FOUND"
+		return nil, errs.NewNotFoundError("user not found", false, &code)
+	}
+
 	return u, nil
 }
 
-// List searches/browses user profiles.
+func (s *UserService) canViewProfile(ctx context.Context, viewerID *string, target *user.User) (bool, error) {
+	if viewerID != nil && *viewerID == target.UserID {
+		return true, nil
+	}
+
+	switch target.ProfileVisibility {
+	case user.ProfileVisibilityPrivate:
+		return false, nil
+	case user.ProfileVisibilityFollowersOnly:
+		if viewerID == nil {
+			return false, nil
+		}
+		isFollowing, err := s.followRepo.IsFollowingUser(ctx, *viewerID, target.UserID)
+		if err != nil {
+			return false, err
+		}
+		return *isFollowing, nil
+	default: // public
+		return true, nil
+	}
+}
+
 func (s *UserService) List(ctx context.Context, viewerID *string, query *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 	res, err := s.repo.GetUsers(ctx, viewerID, query)
 	if err != nil {
@@ -146,8 +251,6 @@ func (s *UserService) List(ctx context.Context, viewerID *string, query *user.Ge
 	return res, nil
 }
 
-// UpdateProfile applies a profile edit for the authenticated user. Email is
-// deliberately not part of UpdateUserPayload -- see UpdateFromClerk.
 func (s *UserService) UpdateProfile(ctx context.Context, userID string, payload *user.UpdateUserPayload) (*user.User, error) {
 	logger := middleware.GetLoggerFromContext(ctx)
 
@@ -158,10 +261,32 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID string, payload 
 	}
 
 	logger.Info().Str("event", "user_profile_updated").Str("user_id", userID).Msg("profile updated")
+	s.indexUser(ctx, updated)
 	return updated, nil
 }
 
-// GetPostsByUser lists a profile's posts.
+func (s *UserService) GetSettings(ctx context.Context, userID string) (*user.User, error) {
+	u, err := s.repo.GetUserByID(ctx, nil, userID)
+	if err != nil {
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("user_id", userID).Msg("failed to fetch settings")
+		return nil, err
+	}
+	return u, nil
+}
+
+func (s *UserService) UpdateSettings(ctx context.Context, userID string, payload *user.UpdateUserSettingsPayload) (*user.User, error) {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	updated, err := s.repo.UpdateUserSettings(ctx, userID, payload)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to update settings")
+		return nil, err
+	}
+
+	logger.Info().Str("event", "user_settings_updated").Str("user_id", userID).Msg("settings updated")
+	return updated, nil
+}
+
 func (s *UserService) GetPostsByUser(ctx context.Context, viewerID *string, profileUserID string, payload *user.GetPostsByUserIDPayload) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
 	res, err := s.repo.GetPostsByUserID(ctx, viewerID, profileUserID, payload)
 	if err != nil {
@@ -171,9 +296,6 @@ func (s *UserService) GetPostsByUser(ctx context.Context, viewerID *string, prof
 	return res, nil
 }
 
-// DeleteAccount deletes the user's Clerk account. The local row is removed
-// asynchronously by the user.deleted webhook (DeleteFromClerk) -- Clerk stays
-// the single source of truth, there's no separate local-delete code path.
 func (s *UserService) DeleteAccount(ctx context.Context, userID string) error {
 	logger := middleware.GetLoggerFromContext(ctx)
 

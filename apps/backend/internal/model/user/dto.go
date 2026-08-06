@@ -7,8 +7,6 @@ import (
 	"github.com/sarbojitrana/nexus/internal/model"
 )
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 type CreateUserPayload struct {
 	Username    string  `json:"username" validate:"required"`
 	DisplayName string  `json:"displayName" validate:"required"`
@@ -24,8 +22,6 @@ func (p *CreateUserPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 type UpdateUserPayload struct {
 	Username    *string `json:"username" validate:"omitempty,max=50"`
 	DisplayName *string `json:"displayName" validate:"omitempty,max=50"`
@@ -39,7 +35,17 @@ func (p *UpdateUserPayload) Validate() error {
 	return validate.Struct(p)
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+type UpdateUserSettingsPayload struct {
+	ProfileVisibility     *ProfileVisibility     `json:"profileVisibility" validate:"omitempty,oneof=public followers_only private"`
+	ShowOnlineStatus      *bool                  `json:"showOnlineStatus"`
+	GroupInvitePermission *GroupInvitePermission `json:"groupInvitePermission" validate:"omitempty,oneof=everyone followers_only no_one"`
+	ShareReadReceipts     *bool                  `json:"shareReadReceipts"`
+}
+
+func (p *UpdateUserSettingsPayload) Validate() error {
+	validate := validator.New()
+	return validate.Struct(p)
+}
 
 type GetUserByIDQuery struct {
 	ID string `param:"id" validate:"required"`
@@ -49,8 +55,6 @@ func (p *GetUserByIDQuery) Validate() error {
 	validate := validator.New()
 	return validate.Struct(p)
 }
-
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 type GetUsersQuery struct {
 	CursorSortValue *string      `query:"cursorSortValue"`
@@ -87,8 +91,6 @@ func (p *GetUsersQuery) Validate() error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 type GetPostsByUserIDPayload struct {
 	CursorSortValue  *string      `query:"cursorSortValue"`
 	CursorCreatedAt  *time.Time   `query:"cursorCreatedAt"`
@@ -118,4 +120,3 @@ func (p *GetPostsByUserIDPayload) Validate() error {
 
 	return nil
 }
-

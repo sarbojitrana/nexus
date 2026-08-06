@@ -6,9 +6,6 @@ import (
 	"github.com/sarbojitrana/nexus/internal/middleware"
 )
 
-// registerUserRoutes registers profile CRUD, search, and posts-by-user
-// endpoints. Static segments (e.g. /users/me) take priority over the
-// /users/:id param route in Echo's router regardless of registration order.
 func registerUserRoutes(g *echo.Group, h *handler.Handlers, mw *middleware.Middlewares) {
 	g.GET("/users", h.User.GetUsers, mw.Auth.OptionalAuth)
 	g.GET("/users/:id", h.User.GetUserByID, mw.Auth.OptionalAuth)
@@ -17,4 +14,9 @@ func registerUserRoutes(g *echo.Group, h *handler.Handlers, mw *middleware.Middl
 	g.GET("/users/me", h.User.GetMe, mw.Auth.RequireAuth)
 	g.PATCH("/users/me", h.User.UpdateMe, mw.Auth.RequireAuth)
 	g.DELETE("/users/me", h.User.DeleteMe, mw.Auth.RequireAuth)
+
+	g.GET("/users/me/settings", h.User.GetMySettings, mw.Auth.RequireAuth)
+	g.PATCH("/users/me/settings", h.User.UpdateMySettings, mw.Auth.RequireAuth)
+
+	g.POST("/users/me/password-changed", h.User.NotifyPasswordChanged, mw.Auth.RequireAuth)
 }

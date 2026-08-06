@@ -25,8 +25,6 @@ func NewUserHandler(s *server.Server, services *service.Services) *UserHandler {
 	}
 }
 
-// viewerIDFromContext returns the authenticated caller's id, or nil when the
-// request is anonymous (routes using OptionalAuth).
 func viewerIDFromContext(c echo.Context) *string {
 	if id := middleware.GetUserID(c); id != "" {
 		return &id
@@ -48,8 +46,27 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 
 func (h *UserHandler) GetMe(c echo.Context) error {
 	return Handle(h.Handler, func(c echo.Context, req *model.Empty) (*user.User, error) {
-		return h.services.User.GetByID(c.Request().Context(), nil, middleware.GetUserID(c))
+		userID := middleware.GetUserID(c)
+		return h.services.User.GetByID(c.Request().Context(), &userID, userID)
 	}, http.StatusOK, &model.Empty{})(c)
+}
+
+func (h *UserHandler) GetMySettings(c echo.Context) error {
+	return Handle(h.Handler, func(c echo.Context, req *model.Empty) (*user.User, error) {
+		return h.services.User.GetSettings(c.Request().Context(), middleware.GetUserID(c))
+	}, http.StatusOK, &model.Empty{})(c)
+}
+
+func (h *UserHandler) UpdateMySettings(c echo.Context) error {
+	return Handle(h.Handler, func(c echo.Context, req *user.UpdateUserSettingsPayload) (*user.User, error) {
+		return h.services.User.UpdateSettings(c.Request().Context(), middleware.GetUserID(c), req)
+	}, http.StatusOK, &user.UpdateUserSettingsPayload{})(c)
+}
+
+func (h *UserHandler) NotifyPasswordChanged(c echo.Context) error {
+	return HandleNoContent(h.Handler, func(c echo.Context, req *model.Empty) error {
+		return h.services.User.NotifyPasswordChanged(c.Request().Context(), middleware.GetUserID(c))
+	}, http.StatusNoContent, &model.Empty{})(c)
 }
 
 func (h *UserHandler) UpdateMe(c echo.Context) error {

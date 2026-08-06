@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ZUser,
   ZUpdateUserPayload,
+  ZUpdateUserSettingsPayload,
   ZGetUsersQuery,
   ZGetPostsByUserIDQuery,
   ZPostCommentsResponse,
@@ -62,6 +63,35 @@ export const userContract = c.router(
       body: ZUpdateUserPayload,
       responses: {
         200: ZUser,
+      },
+      metadata: getSecurityMetadata(),
+    },
+    getMySettings: {
+      summary: "Get the authenticated user's privacy settings",
+      method: "GET",
+      path: "/users/me/settings",
+      responses: {
+        200: ZUser,
+      },
+      metadata: getSecurityMetadata(),
+    },
+    updateMySettings: {
+      summary: "Update the authenticated user's privacy settings",
+      method: "PATCH",
+      path: "/users/me/settings",
+      body: ZUpdateUserSettingsPayload,
+      responses: {
+        200: ZUser,
+      },
+      metadata: getSecurityMetadata(),
+    },
+    notifyPasswordChanged: {
+      summary: "Trigger the password-changed confirmation email",
+      method: "POST",
+      path: "/users/me/password-changed",
+      body: c.noBody(),
+      responses: {
+        204: c.noBody(),
       },
       metadata: getSecurityMetadata(),
     },

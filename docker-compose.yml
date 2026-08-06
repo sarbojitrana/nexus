@@ -27,6 +27,26 @@ services:
       timeout: 3s
       retries: 10
 
+  opensearch:
+    image: opensearchproject/opensearch:2
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms256m -Xmx256m"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "N3xus!DevOnly"
+      # Local dev boxes are often near-full; don't let OpenSearch's disk
+      # watermark flip the cluster read-only over a few free GB.
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+    ports:
+      - "9200:9200"
+    volumes:
+      - nexus_opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./apps/backend
@@ -37,6 +57,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      opensearch:
         condition: service_healthy
     environment:
       NEXUS_PRIMARY.ENV: local
@@ -56,9 +78,19 @@ services:
       NEXUS_DATABASE.CONN_MAX_LIFETIME: "300"
       NEXUS_DATABASE.CONN_MAX_IDLE_TIME: "60"
       NEXUS_REDIS.ADDRESS: redis:6379
+      NEXUS_SEARCH.URL: http://opensearch:9200
+      NEXUS_AWS.REGION: ${NEXUS_AWS_REGION:-}
+      NEXUS_AWS.ACCESS_KEY_ID: ${NEXUS_AWS_ACCESS_KEY_ID:-}
+      NEXUS_AWS.SECRET_ACCESS_KEY: ${NEXUS_AWS_SECRET_ACCESS_KEY:-}
+      NEXUS_AWS.ENDPOINT_URL: ${NEXUS_AWS_ENDPOINT_URL:-}
+      NEXUS_AWS.UPLOAD_BUCKET: ${NEXUS_AWS_UPLOAD_BUCKET:-}
       NEXUS_AUTH.SECRET_KEY: ${CLERK_SECRET_KEY:?Set CLERK_SECRET_KEY in your .env}
       NEXUS_AUTH.WEBHOOK_SECRET: ${CLERK_WEBHOOK_SECRET:?Set CLERK_WEBHOOK_SECRET in your .env}
-      NEXUS_INTEGRATION.RESEND_API_KEY: ${RESEND_API_KEY:?Set RESEND_API_KEY in your .env}
+      NEXUS_INTEGRATION.SMTP_HOST: smtp.gmail.com
+      NEXUS_INTEGRATION.SMTP_PORT: "587"
+      NEXUS_INTEGRATION.SMTP_USERNAME: ${GMAIL_SMTP_USERNAME:?Set GMAIL_SMTP_USERNAME in your .env}
+      NEXUS_INTEGRATION.SMTP_PASSWORD: ${GMAIL_SMTP_PASSWORD:?Set GMAIL_SMTP_PASSWORD in your .env}
+      NEXUS_INTEGRATION.SMTP_FROM: ${GMAIL_SMTP_FROM:?Set GMAIL_SMTP_FROM in your .env}
       NEXUS_OBSERVABILITY.SERVICE_NAME: nexus
       NEXUS_OBSERVABILITY.ENVIRONMENT: development
       NEXUS_OBSERVABILITY.LOGGING.LEVEL: debug
@@ -75,3 +107,4 @@ services:
 volumes:
   nexus_postgres_data:
   nexus_redis_data:
+  nexus_opensearch_data:
