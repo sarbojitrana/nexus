@@ -10,6 +10,7 @@ export default function SignInPage() {
       </nav>
       <div className="grid flex-1 place-items-center px-5 py-[6vh]">
         <SignIn
+          fallbackRedirectUrl="/dashboard"
           appearance={{
             elements: {
               card: "shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)] border border-border",
