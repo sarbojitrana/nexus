@@ -48,24 +48,6 @@ CREATE TRIGGER set_updated_at_community_members BEFORE
 UPDATE ON community_members FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at ();
 
 
-CREATE TABLE
-    communtiy_reports(
-        id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        reporter_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
-        community_id UUID NOT NULL REFERENCES communities ON DELETE CASCADE,
-        post_id UUID NOT NULL REFERENCES posts ON DELETE CASCADE,
-        reason TEXT NOT NULL,
-        status VARCHAR(50) NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP 
-    );
-
-CREATE INDEX idx_community_reports_reporter_id ON communtiy_reports(reporter_id);
-CREATE INDEX idx_community_reports_post_id ON communtiy_reports(post_id);
-CREATE INDEX idx_community_reports_community_id ON communtiy_reports(community_id);
-CREATE INDEX idx_community_reports_status ON communtiy_reports(status);
-
-
 CREATE TABLE banned_from_community_users (
     community_id UUID NOT NULL REFERENCES communities ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users ON DELETE CASCADE,
