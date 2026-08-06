@@ -9,6 +9,7 @@ import { formatTimeAgo } from "@/lib/format";
 import { Avatar } from "@/components/chat/avatar";
 import { MessageThread } from "@/components/chat/message-thread";
 import { NewGroupModal } from "@/components/chat/new-group-modal";
+import { NewMessageModal } from "@/components/chat/new-message-modal";
 import type { ConversationSummary, Message, Invitation } from "@nexus/zod";
 
 export function ChatApp() {
@@ -24,6 +25,7 @@ export function ChatApp() {
   );
   const [messages, setMessages] = useState<Message[]>([]);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
   const [showInvitations, setShowInvitations] = useState(false);
 
   const loadConversations = useCallback(async () => {
@@ -130,6 +132,12 @@ export function ChatApp() {
               )}
             </button>
             <button
+              onClick={() => setShowMessageModal(true)}
+              className="rounded-[9px] border border-border px-2.5 py-1.5 text-[0.72rem] font-bold text-text-muted hover:bg-surface"
+            >
+              + Message
+            </button>
+            <button
               onClick={() => setShowGroupModal(true)}
               className="rounded-[9px] bg-accent px-2.5 py-1.5 text-[0.72rem] font-bold text-accent-text hover:bg-accent-strong"
             >
@@ -230,6 +238,17 @@ export function ChatApp() {
           onClose={() => setShowGroupModal(false)}
           onCreated={(id) => {
             setShowGroupModal(false);
+            loadConversations();
+            selectConversation(id);
+          }}
+        />
+      )}
+
+      {showMessageModal && (
+        <NewMessageModal
+          onClose={() => setShowMessageModal(false)}
+          onStarted={(id) => {
+            setShowMessageModal(false);
             loadConversations();
             selectConversation(id);
           }}

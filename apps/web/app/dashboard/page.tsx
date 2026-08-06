@@ -2,6 +2,7 @@ import { PostCard } from "@/components/post-card";
 import { FollowButton } from "@/components/follow-button";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { SearchBar } from "@/components/search-bar";
+import { NewPostButton } from "@/components/new-post-modal";
 import { getServerApi, getServerUserId } from "@/lib/api-server";
 import { formatTimeAgo } from "@/lib/format";
 import type { User, PopulatedPost, MiniCommunity } from "@nexus/zod";
@@ -75,6 +76,7 @@ export default async function DashboardPage() {
               For you
             </span>
           </div>
+          <NewPostButton />
         </div>
 
         {posts.map((p) => {

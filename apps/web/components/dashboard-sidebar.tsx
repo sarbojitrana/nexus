@@ -5,11 +5,10 @@ import { getServerApi } from "@/lib/api-server";
 
 const NAV_LINKS = [
   { label: "Home feed", href: "/dashboard" },
-  { label: "Communities", href: null },
-  { label: "Following", href: null },
+  { label: "Communities", href: "/dashboard/communities" },
+  { label: "Following", href: "/dashboard/following" },
   { label: "Messages", href: "/dashboard/messages" },
   { label: "Notifications", href: "/dashboard/notifications" },
-  { label: "Settings", href: "/dashboard/settings" },
 ];
 
 export async function DashboardSidebar({ active }: { active: string }) {
@@ -29,7 +28,7 @@ export async function DashboardSidebar({ active }: { active: string }) {
       <nav className="flex flex-col gap-0.5">
         {NAV_LINKS.map((l) => {
           const isActive = l.href === active;
-          return l.href ? (
+          return (
             <Link
               key={l.label}
               href={l.href}
@@ -44,14 +43,6 @@ export async function DashboardSidebar({ active }: { active: string }) {
               />
               {l.label}
             </Link>
-          ) : (
-            <span
-              key={l.label}
-              className="flex items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[0.88rem] font-semibold text-text-faint opacity-60"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-40" />
-              {l.label}
-            </span>
           );
         })}
       </nav>
