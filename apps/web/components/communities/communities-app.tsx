@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/use-api";
+import { apiErrorMessage } from "@/lib/api-error";
 import type { MiniCommunity } from "@nexus/zod";
 
 export function CommunitiesApp() {
@@ -147,7 +148,7 @@ function CreateCommunityModal({
     if (res && res.status === 201) {
       onCreated();
     } else {
-      setError("Couldn't create the community. That slug might already be taken.");
+      setError(apiErrorMessage(res, "Couldn't create the community."));
     }
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
 import { useUpload, type UploadedMedia } from "@/lib/use-upload";
+import { apiErrorMessage } from "@/lib/api-error";
 import type { MiniCommunity } from "@nexus/zod";
 
 type Staged = UploadedMedia & { name: string; previewUrl: string };
@@ -101,9 +102,7 @@ export function NewPostButton({ communityId: fixedCommunityId }: { communityId?:
       if (!fixedCommunityId) setCommunityId("");
       router.refresh();
     } else {
-      setError(
-        "Couldn't create the post. If it's in a community, you need to be a member first."
-      );
+      setError(apiErrorMessage(res, "Couldn't create the post."));
     }
   }
 

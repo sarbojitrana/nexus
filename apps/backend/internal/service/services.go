@@ -27,7 +27,7 @@ func NewServices(s *server.Server, repos *repository.Repositories) (*Services, e
 	communityService := NewCommunityService(s, repos.Community, s.Search)
 	followService := NewFollowService(s, repos.Follow, notificationService)
 	chatService := NewChatService(s, repos.Chat, repos.User, repos.Follow, s.Hub, notificationService)
-	searchService := NewSearchService(s, s.Search)
+	searchService := NewSearchService(s, s.Search, repos.Search)
 	storageService := NewStorageService(s, s.Storage)
 
 	s.Hub.OnConnect = func(userID string) { chatService.BroadcastPresence(userID, true) }

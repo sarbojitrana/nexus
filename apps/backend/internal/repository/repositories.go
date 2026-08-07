@@ -9,6 +9,7 @@ type Repositories struct {
 	Follow       *FollowRepository
 	Chat         *ChatRepository
 	Notification *NotificationRepository
+	Search       *SearchRepository
 }
 
 func NewRepositories(s *server.Server) *Repositories {
@@ -19,5 +20,6 @@ func NewRepositories(s *server.Server) *Repositories {
 		Follow:       NewFollowRepository(s),
 		Chat:         NewChatRepository(s),
 		Notification: NewNotificationRepository(s),
+		Search:       NewSearchRepository(s),
 	}
 }
