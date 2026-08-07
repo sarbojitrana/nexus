@@ -11,12 +11,21 @@ import (
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+// PostMediaInput is an already-uploaded object (via the presign flow) being
+// attached to a post at creation time.
+type PostMediaInput struct {
+	StorageKey string `json:"storageKey" validate:"required"`
+	FileSize   int64  `json:"fileSize" validate:"required"`
+	MimeType   string `json:"mimeType" validate:"required"`
+}
+
 type CreatePostPayload struct {
-	CommunityID  *uuid.UUID `json:"communityId" validate:"omitempty,uuid"`
-	ParentPostID *uuid.UUID `json:"parentPostId" validate:"omitempty,uuid"`
-	PostType     PostType   `json:"postType" validate:"required,oneof=comment post"`
-	Title        *string    `json:"title"`
-	Content      *string    `json:"content"`
+	CommunityID  *uuid.UUID       `json:"communityId" validate:"omitempty,uuid"`
+	ParentPostID *uuid.UUID       `json:"parentPostId" validate:"omitempty,uuid"`
+	PostType     PostType         `json:"postType" validate:"required,oneof=comment post"`
+	Title        *string          `json:"title"`
+	Content      *string          `json:"content"`
+	Media        []PostMediaInput `json:"media" validate:"omitempty,max=8,dive"`
 }
 
 func (p *CreatePostPayload) Validate() error {

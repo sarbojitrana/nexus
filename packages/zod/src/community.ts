@@ -42,7 +42,7 @@ export const ZMiniCommunity = z.object({
   communityId: z.string().uuid(),
   slug: z.string(),
   communityName: z.string(),
-  communityAvatarKey: z.string(),
+  communityAvatarKey: z.string().nullable(),
   membersCount: z.number(),
   postsCount: z.number(),
   createdAt: z.string().datetime(),
@@ -51,11 +51,13 @@ export type MiniCommunity = z.infer<typeof ZMiniCommunity>;
 
 export const ZMiniCommunityUser = z.object({
   userId: z.string(),
-  avatarKey: z.string(),
+  avatarKey: z.string().nullable(),
   name: z.string(),
   joinedAt: z.string().datetime(),
   role: ZCommunityRole,
 });
+export type MiniCommunityUser = z.infer<typeof ZMiniCommunityUser>;
+export type CommunityRole = z.infer<typeof ZCommunityRole>;
 
 export const ZCommunityReport = z.object({
   id: z.string().uuid(),
@@ -67,6 +69,7 @@ export const ZCommunityReport = z.object({
   reason: z.string(),
   status: ZCommunityReportStatus,
 });
+export type CommunityReport = z.infer<typeof ZCommunityReport>;
 
 export const ZBannedFromCommunityUser = z.object({
   communityId: z.string().uuid(),

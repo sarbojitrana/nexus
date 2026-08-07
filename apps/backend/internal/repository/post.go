@@ -91,18 +91,45 @@ func (r *PostRepository) CreatePost(ctx context.Context, userID string, payload 
 		"content":        payload.Content,
 	}
 
-	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	tx, err := r.server.DB.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, stmt, args)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create post for user_id %s: %w", userID, err)
 	}
-	post, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[post.Post])
+	created, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[post.Post])
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse the post to a struct for user_id %s: %w", userID, err)
 	}
 
-	return &post, nil
+	// Media is attached in the same transaction -- a post that half-saved its
+	// images is worse than one that failed outright and can be retried.
+	for _, m := range payload.Media {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO post_media (post_id, download_key, file_size, mime_type)
+			VALUES (@post_id, @download_key, @file_size, @mime_type)
+		`, pgx.NamedArgs{
+			"post_id":      created.ID,
+			"download_key": m.StorageKey,
+			"file_size":    m.FileSize,
+			"mime_type":    m.MimeType,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to attach media to post %s: %w", created.ID, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit post creation: %w", err)
+	}
+
+	return &created, nil
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -197,7 +224,7 @@ func (r *PostRepository) GetPostByID(ctx context.Context, viewerID *string, post
 	stmt := fmt.Sprintf(`
 		SELECT p.*,
 		COALESCE(
-			json_agg(
+			jsonb_agg(
 				to_jsonb(camel(pm))
 				ORDER BY pm.created_at DESC, pm.id DESC
 			) FILTER(WHERE pm.id IS NOT NULL),
@@ -227,7 +254,7 @@ func (r *PostRepository) GetCommentsByPostID(ctx context.Context, viewerID *stri
 	stmt := `
 		SELECT c.*,
 		COALESCE(
-			json_agg(
+			jsonb_agg(
 				to_jsonb(camel(pm))
 				ORDER BY pm.created_at DESC, pm.id DESC
 			) FILTER(WHERE pm.id IS NOT NULL),
@@ -409,7 +436,7 @@ func (r *PostRepository) GetRepliesByCommentID(ctx context.Context, viewerID *st
 	stmt := fmt.Sprintf(`
 		SELECT r.*,
 		COALESCE(
-			json_agg(
+			jsonb_agg(
 				to_jsonb(camel(pm))
 				ORDER BY pm.created_at DESC
 			) FILTER(WHERE pm.id IS NOT NULL),
@@ -781,7 +808,7 @@ func (r *PostRepository) fetchTrendingLane(ctx context.Context, userID *string, 
 			p.*,
 			r.decayed_score,
 			COALESCE(
-				json_agg(
+				jsonb_agg(
 					to_jsonb(camel(pm))
 					ORDER BY pm.created_at DESC, pm.id DESC
 				) FILTER (WHERE pm.id IS NOT NULL),
@@ -860,7 +887,7 @@ func (r *PostRepository) fetchFollowingLane(ctx context.Context, userID *string,
 		SELECT
 			p.*,
 			COALESCE(
-				json_agg(
+				jsonb_agg(
 					to_jsonb(camel(pm))
 					ORDER BY pm.created_at DESC, pm.id DESC
 				) FILTER (WHERE pm.id IS NOT NULL),

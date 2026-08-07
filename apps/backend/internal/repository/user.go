@@ -217,7 +217,7 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *string,
 	stmt := `
 		SELECT p.*,
 		COALESCE(
-			json_agg(
+			jsonb_agg(
 				to_json(camel(pm))
 				ORDER BY pm.created_at ASC
 			) FILTER(

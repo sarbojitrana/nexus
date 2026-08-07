@@ -18,6 +18,17 @@
   --color-accent-text: #1a0a10;
   --color-up: #33c17a;
   --color-down: #6c7bff;
+
+  /* Sharp corners are the house style -- every radius token resolves to 0
+     so utility classes like rounded-lg can't reintroduce soft corners. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 }
 
 html {
@@ -44,6 +55,49 @@ h3 {
 
 :focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
-  border-radius: 4px;
+  outline-offset: 2px;
+}
+
+/* HUD eyebrow: uppercase mono label used for section headers and metadata */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* Corner-bracket frame around the viewport, purely decorative */
+.hud-corner {
+  position: fixed;
+  width: 20px;
+  height: 20px;
+  border-color: var(--color-text-faint);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 50;
+}
+.hud-corner--tl {
+  top: 8px;
+  left: 8px;
+  border-top: 1.5px solid;
+  border-left: 1.5px solid;
+}
+.hud-corner--tr {
+  top: 8px;
+  right: 8px;
+  border-top: 1.5px solid;
+  border-right: 1.5px solid;
+}
+.hud-corner--bl {
+  bottom: 8px;
+  left: 8px;
+  border-bottom: 1.5px solid;
+  border-left: 1.5px solid;
+}
+.hud-corner--br {
+  bottom: 8px;
+  right: 8px;
+  border-bottom: 1.5px solid;
+  border-right: 1.5px solid;
 }

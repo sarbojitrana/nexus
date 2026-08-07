@@ -8,4 +8,5 @@ import (
 
 func registerStorageRoutes(g *echo.Group, h *handler.Handlers, mw *middleware.Middlewares) {
 	g.POST("/uploads/presign", h.Storage.PresignUpload, mw.Auth.RequireAuth)
+	g.POST("/uploads/download-urls", h.Storage.PresignDownloads, mw.Auth.RequireAuth)
 }

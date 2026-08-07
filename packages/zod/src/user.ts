@@ -35,8 +35,8 @@ export const ZMiniUser = z.object({
   id: z.string(),
   username: z.string(),
   displayName: z.string(),
-  avatarKey: z.string(),
-  bio: z.string(),
+  avatarKey: z.string().nullable(),
+  bio: z.string().nullable(),
   followerCount: z.number(),
   createdAt: z.string().datetime(),
 });

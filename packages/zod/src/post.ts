@@ -6,12 +6,18 @@ export const ZVoteType = z.enum(["upvote", "downvote"]);
 
 export const ZPostMedia = z.object({
   id: z.string().uuid(),
-  userId: z.string().uuid(),
   postId: z.string().uuid(),
   downloadKey: z.string(),
   fileSize: z.number(),
   mimeType: z.string(),
   createdAt: z.string().datetime(),
+});
+export type PostMedia = z.infer<typeof ZPostMedia>;
+
+export const ZPostMediaInput = z.object({
+  storageKey: z.string(),
+  fileSize: z.number(),
+  mimeType: z.string(),
 });
 
 export const ZPost = z.object({
@@ -44,6 +50,7 @@ export const ZCreatePostPayload = z.object({
   postType: ZPostType,
   title: z.string().nullable().optional(),
   content: z.string().nullable().optional(),
+  media: z.array(ZPostMediaInput).max(8).optional(),
 });
 
 export const ZUpdatePostByIDPayload = z.object({

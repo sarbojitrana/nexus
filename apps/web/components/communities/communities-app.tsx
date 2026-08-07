@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useApi } from "@/lib/use-api";
 import type { MiniCommunity } from "@nexus/zod";
 
@@ -40,7 +41,7 @@ export function CommunitiesApp() {
         <h1 className="font-display text-[1.4rem] font-extrabold">Communities</h1>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="rounded-[9px] bg-accent px-4 py-2 text-[0.8rem] font-bold text-accent-text hover:bg-accent-strong"
+          className=" bg-accent px-4 py-2 text-[0.8rem] font-bold text-accent-text hover:bg-accent-strong"
         >
           + Create community
         </button>
@@ -50,7 +51,7 @@ export function CommunitiesApp() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search communities..."
-        className="rounded-[9px] border border-border bg-surface px-3.5 py-2.5 text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
+        className=" border border-border bg-surface px-3.5 py-2.5 text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
       />
 
       <div className="flex flex-col gap-2">
@@ -60,19 +61,24 @@ export function CommunitiesApp() {
           communities.map((c) => (
             <div
               key={c.communityId}
-              className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4"
+              className="flex items-center gap-3 border border-border bg-surface p-4"
             >
-              <div className="h-11 w-11 shrink-0 rounded-[9px] bg-gradient-to-br from-accent to-down" />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <strong className="text-[0.9rem] font-bold">n/{c.slug}</strong>
-                <span className="text-[0.74rem] text-text-faint">
-                  {c.membersCount} members · {c.postsCount} posts
+              <div className="h-11 w-11 shrink-0 bg-accent" />
+              <Link
+                href={`/dashboard/communities/${c.slug}`}
+                className="flex min-w-0 flex-1 flex-col gap-0.5"
+              >
+                <strong className="text-[0.9rem] font-bold hover:text-accent-strong">
+                  n/{c.slug}
+                </strong>
+                <span className="font-mono text-[0.7rem] text-text-faint">
+                  {c.communityName} · {c.membersCount} members · {c.postsCount} posts
                 </span>
-              </div>
+              </Link>
               <button
                 onClick={() => join(c.communityId)}
                 disabled={joinedIds.has(c.communityId)}
-                className="shrink-0 rounded-[9px] border border-border px-4 py-2 text-[0.78rem] font-bold text-text-muted hover:border-accent hover:text-accent-strong disabled:opacity-50"
+                className="shrink-0 border border-border px-4 py-2 font-mono text-[0.7rem] font-bold tracking-[0.05em] text-text-muted uppercase hover:border-accent hover:text-accent-strong disabled:opacity-50"
               >
                 {joinedIds.has(c.communityId) ? "Joined" : "Join"}
               </button>
@@ -80,7 +86,7 @@ export function CommunitiesApp() {
           ))}
 
         {!isLoading && communities.length === 0 && (
-          <div className="rounded-2xl border border-border bg-surface p-6 text-center text-[0.86rem] text-text-muted">
+          <div className=" border border-border bg-surface p-6 text-center text-[0.86rem] text-text-muted">
             {query.trim() ? "No communities match that search." : "No communities yet — create the first one."}
           </div>
         )}
@@ -147,7 +153,7 @@ function CreateCommunityModal({
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
-      <div className="flex w-full max-w-[440px] flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-5">
+      <div className="flex w-full max-w-[440px] flex-col gap-4 border border-border bg-surface-raised p-5">
         <h3 className="text-[1rem] font-bold">Create a community</h3>
 
         <label className="flex flex-col gap-1.5">
@@ -156,7 +162,7 @@ function CreateCommunityModal({
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             placeholder="Photography"
-            className="rounded-[9px] border border-border bg-surface px-3.5 py-2.5 text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
+            className=" border border-border bg-surface px-3.5 py-2.5 text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
           />
         </label>
 
@@ -169,7 +175,7 @@ function CreateCommunityModal({
               setSlugTouched(true);
             }}
             placeholder="photography"
-            className="rounded-[9px] border border-border bg-surface px-3.5 py-2.5 font-mono text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
+            className=" border border-border bg-surface px-3.5 py-2.5 font-mono text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
           />
         </label>
 
@@ -180,7 +186,7 @@ function CreateCommunityModal({
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             placeholder="What's this community about? (optional)"
-            className="resize-none rounded-[9px] border border-border bg-surface px-3.5 py-2.5 text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
+            className="resize-none border border-border bg-surface px-3.5 py-2.5 text-[0.86rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
           />
         </label>
 
@@ -189,14 +195,14 @@ function CreateCommunityModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-[9px] px-4 py-2 text-[0.82rem] font-bold text-text-muted hover:bg-surface"
+            className=" px-4 py-2 text-[0.82rem] font-bold text-text-muted hover:bg-surface"
           >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={isSubmitting || !name.trim() || !slug.trim()}
-            className="rounded-[9px] bg-accent px-4 py-2 text-[0.82rem] font-bold text-accent-text hover:bg-accent-strong disabled:opacity-50"
+            className=" bg-accent px-4 py-2 text-[0.82rem] font-bold text-accent-text hover:bg-accent-strong disabled:opacity-50"
           >
             {isSubmitting ? "Creating..." : "Create"}
           </button>

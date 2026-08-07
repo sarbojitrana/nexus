@@ -40,3 +40,29 @@ func (s *StorageService) PresignUpload(ctx context.Context, userID, mimeType str
 	logger.Info().Str("event", "upload_presigned").Str("user_id", userID).Str("key", key).Msg("upload URL presigned")
 	return url, key, nil
 }
+
+// PresignDownloads resolves storage keys to temporary read URLs. Keys that
+// fail to sign are omitted rather than failing the whole batch, so one bad
+// key can't blank out an entire feed's media.
+func (s *StorageService) PresignDownloads(ctx context.Context, keys []string) (map[string]string, error) {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	urls := make(map[string]string, len(keys))
+	if !s.storage.Enabled() {
+		return urls, nil
+	}
+
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		url, err := s.storage.PresignDownload(ctx, key)
+		if err != nil {
+			logger.Error().Err(err).Str("key", key).Msg("failed to presign download")
+			continue
+		}
+		urls[key] = url
+	}
+
+	return urls, nil
+}

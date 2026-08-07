@@ -56,7 +56,7 @@ type MiniCommunity struct {
 	CommnunityID uuid.UUID `json:"communityId" db:"community_id"`
 	Slug         string    `json:"slug" db:"slug"`
 	Name         string    `json:"communityName" db:"name"`
-	AvatarKey    string    `json:"communityAvatarKey" db:"avatar_key"`
+	AvatarKey    *string   `json:"communityAvatarKey" db:"avatar_key"`
 	MembersCount int       `json:"membersCount" db:"members_count"`
 	PostsCount   int       `json:"postsCount" db:"posts_count"`
 	model.BaseWithCreatedAt
@@ -85,7 +85,7 @@ type BannedFromCommunityUser struct {
 
 type MiniCommunityUser struct {
 	UserID    string        `json:"userId" db:"user_id"`
-	AvatarKey string        `json:"avatarKey" db:"avatar_key"`
+	AvatarKey *string       `json:"avatarKey" db:"avatar_key"`
 	Name      string        `json:"name" db:"name"`
 	JoinedAt  time.Time     `json:"joinedAt" db:"joined_at"`
 	Role      CommunityRole `json:"role" db:"role"`

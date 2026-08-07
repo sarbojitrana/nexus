@@ -39,7 +39,6 @@ type Post struct {
 
 type PostMedia struct {
 	model.BaseWithId
-	UserID      uuid.UUID `json:"userId" db:"user_id"`
 	PostID      uuid.UUID `json:"postId" db:"post_id"`
 	DownloadKey string    `json:"downloadKey" db:"download_key"`
 	FileSize    int64     `json:"fileSize" db:"file_size"`

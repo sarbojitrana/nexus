@@ -29,3 +29,13 @@ func (h *StorageHandler) PresignUpload(c echo.Context) error {
 		return &storage.PresignUploadResponse{UploadURL: url, Key: key}, nil
 	}, http.StatusOK, &storage.PresignUploadPayload{})(c)
 }
+
+func (h *StorageHandler) PresignDownloads(c echo.Context) error {
+	return Handle(h.Handler, func(c echo.Context, req *storage.PresignDownloadsPayload) (*storage.PresignDownloadsResponse, error) {
+		urls, err := h.services.Storage.PresignDownloads(c.Request().Context(), req.Keys)
+		if err != nil {
+			return nil, err
+		}
+		return &storage.PresignDownloadsResponse{URLs: urls}, nil
+	}, http.StatusOK, &storage.PresignDownloadsPayload{})(c)
+}

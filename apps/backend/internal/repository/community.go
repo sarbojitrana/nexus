@@ -236,7 +236,7 @@ func (r *CommunityRepository) GetCommunityPostByID(ctx context.Context, userID s
 	stmt := `
 		SELECT p.*,
 		COALESCE(
-			json_agg(
+			jsonb_agg(
 				to_jsonb(camel(pm))
 				ORDER BY pm.created_at DESC, pm.id DESC
 			) FILTER(WHERE pm.id IS NOT NULL),
@@ -776,7 +776,8 @@ func (r *CommunityRepository) GetUserRole(ctx context.Context, communityID uuid.
 func (r *CommunityRepository) GetCommunities(ctx context.Context, query *community.GetCommunitiesQuery) (*model.CursorPaginatedResponse[community.MiniCommunity], error) {
 
 	stmt := `
-		SELECT c.id AS community_id, c.name, c.avatar_key
+		SELECT c.id AS community_id, c.slug, c.name, c.avatar_key,
+			c.members_count, c.posts_count, c.created_at
 		FROM communities c
 	`
 	conditions := []string{}

@@ -1,5 +1,10 @@
 import { initContract } from "@ts-rest/core";
-import { ZPresignUploadPayload, ZPresignUploadResponse } from "@nexus/zod";
+import {
+  ZPresignUploadPayload,
+  ZPresignUploadResponse,
+  ZPresignDownloadsPayload,
+  ZPresignDownloadsResponse,
+} from "@nexus/zod";
 import { getSecurityMetadata } from "@/utils.js";
 
 const c = initContract();
@@ -13,6 +18,16 @@ export const storageContract = c.router(
       body: ZPresignUploadPayload,
       responses: {
         200: ZPresignUploadResponse,
+      },
+      metadata: getSecurityMetadata(),
+    },
+    presignDownloads: {
+      summary: "Resolve storage keys to temporary read URLs",
+      method: "POST",
+      path: "/uploads/download-urls",
+      body: ZPresignDownloadsPayload,
+      responses: {
+        200: ZPresignDownloadsResponse,
       },
       metadata: getSecurityMetadata(),
     },

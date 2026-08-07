@@ -13,6 +13,10 @@ import (
 	"github.com/sarbojitrana/nexus/internal/config"
 )
 
+// downloadURLTTL is long enough that a feed's media stays viewable while the
+// user reads, short enough that a leaked URL expires quickly.
+const downloadURLTTL = 6 * time.Hour
+
 type Client struct {
 	presign *s3.PresignClient
 	bucket  string
@@ -64,6 +68,25 @@ func (c *Client) PresignUpload(ctx context.Context, key, contentType string) (st
 	}, s3.WithPresignExpires(15*time.Minute))
 	if err != nil {
 		return "", fmt.Errorf("failed to presign upload: %w", err)
+	}
+
+	return req.URL, nil
+}
+
+// PresignDownload returns a temporary read URL for a stored object. The
+// bucket stays private -- media is served through these short-lived URLs
+// rather than by making the bucket public.
+func (c *Client) PresignDownload(ctx context.Context, key string) (string, error) {
+	if !c.Enabled() {
+		return "", fmt.Errorf("storage is not configured")
+	}
+
+	req, err := c.presign.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(downloadURLTTL))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign download: %w", err)
 	}
 
 	return req.URL, nil

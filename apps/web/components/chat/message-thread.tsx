@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { formatTimeAgo } from "@/lib/format";
+import { InviteToGroupModal } from "@/components/chat/invite-modal";
+import { ChatAttachment } from "@/components/chat/chat-attachment";
 import type { ConversationSummary, Message } from "@nexus/zod";
 
 export function MessageThread({
@@ -20,6 +22,7 @@ export function MessageThread({
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,9 +88,17 @@ export function MessageThread({
       <div className="flex items-center gap-2 border-b border-border-soft px-4 py-3">
         <strong className="text-[0.9rem] font-bold">{title}</strong>
         {conversation.isGroup && (
-          <span className="font-mono text-[0.68rem] text-text-faint">
-            {conversation.participants.length} members
-          </span>
+          <>
+            <span className="font-mono text-[0.68rem] text-text-faint">
+              {conversation.participants.length} members
+            </span>
+            <button
+              onClick={() => setShowInvite(true)}
+              className="ml-auto border border-border px-2.5 py-1 font-mono text-[0.64rem] tracking-[0.05em] text-text-muted uppercase hover:border-accent hover:text-accent-strong"
+            >
+              + Invite
+            </button>
+          </>
         )}
       </div>
 
@@ -109,14 +120,11 @@ export function MessageThread({
               >
                 {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
                 {m.attachmentKey && (
-                  <div
-                    className={`mt-1 flex items-center gap-1.5 rounded-[9px] px-2 py-1 text-[0.74rem] ${
-                      mine ? "bg-black/10" : "bg-black/20"
-                    }`}
-                  >
-                    📎 {m.attachmentMimeType ?? "attachment"}
-                    {m.attachmentFileSize ? ` · ${Math.round(m.attachmentFileSize / 1024)}KB` : ""}
-                  </div>
+                  <ChatAttachment
+                    storageKey={m.attachmentKey}
+                    mimeType={m.attachmentMimeType}
+                    fileSize={m.attachmentFileSize}
+                  />
                 )}
               </div>
               <span className="mt-0.5 px-1 text-[0.66rem] text-text-faint">
@@ -167,6 +175,13 @@ export function MessageThread({
           Send
         </button>
       </div>
+
+      {showInvite && (
+        <InviteToGroupModal
+          conversationId={conversation.id}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
     </div>
   );
 }
