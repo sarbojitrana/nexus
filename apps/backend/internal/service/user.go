@@ -198,6 +198,33 @@ func (s *UserService) DeleteFromClerk(ctx context.Context, clerkID string) error
 	return nil
 }
 
+// GetOrProvisionMe returns the caller's own row, creating it from Clerk if
+// it's missing. The user.created webhook is the normal path, but webhook
+// delivery can fail or be misconfigured -- without this, such an account is
+// permanently broken with no way to recover from inside the app.
+func (s *UserService) GetOrProvisionMe(ctx context.Context, userID string) (*user.User, error) {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	u, err := s.repo.GetUserByID(ctx, &userID, userID)
+	if err == nil {
+		return u, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to fetch own user")
+		return nil, err
+	}
+
+	logger.Warn().Str("user_id", userID).Msg("no local user row, provisioning from clerk")
+
+	cu, err := clerkUser.Get(ctx, userID)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userID).Msg("failed to fetch user from clerk")
+		return nil, err
+	}
+
+	return s.CreateFromClerk(ctx, cu)
+}
+
 func (s *UserService) GetByID(ctx context.Context, viewerID *string, userID string) (*user.User, error) {
 	logger := middleware.GetLoggerFromContext(ctx)
 

@@ -46,8 +46,7 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 
 func (h *UserHandler) GetMe(c echo.Context) error {
 	return Handle(h.Handler, func(c echo.Context, req *model.Empty) (*user.User, error) {
-		userID := middleware.GetUserID(c)
-		return h.services.User.GetByID(c.Request().Context(), &userID, userID)
+		return h.services.User.GetOrProvisionMe(c.Request().Context(), middleware.GetUserID(c))
 	}, http.StatusOK, &model.Empty{})(c)
 }
 

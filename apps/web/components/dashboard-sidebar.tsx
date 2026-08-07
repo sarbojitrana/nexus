@@ -11,7 +11,6 @@ const NAV_LINKS = [
   { label: "Messages", href: "/dashboard/messages" },
   { label: "Notifications", href: "/dashboard/notifications" },
   { label: "Profile", href: "/dashboard/profile" },
-  { label: "Settings", href: "/dashboard/settings" },
 ];
 
 export async function DashboardSidebar({ active }: { active: string }) {

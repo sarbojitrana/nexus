@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
+import { EditProfileModal } from "@/components/profile/edit-profile-modal";
 import { formatTimeAgo } from "@/lib/format";
 import type { User, MiniUser, PopulatedPost } from "@nexus/zod";
 
@@ -19,9 +20,14 @@ export function ProfileView({ userId }: { userId: string }) {
   const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState<Tab>("Posts");
   const [isFollowing, setIsFollowing] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await api.User.getUserById({ params: { id: userId } }).catch(() => null);
+    const isSelf = viewerId === userId;
+    const res = isSelf
+      ? await api.User.getMe().catch(() => null)
+      : await api.User.getUserById({ params: { id: userId } }).catch(() => null);
+
     if (!res || res.status !== 200) {
       setNotFound(true);
       return;
@@ -102,12 +108,12 @@ export function ProfileView({ userId }: { userId: string }) {
             </div>
           )}
           {isSelf && (
-            <Link
-              href="/dashboard/settings"
-              className="shrink-0 border border-border px-5 py-2 font-mono text-[0.7rem] font-bold tracking-[0.06em] text-text-muted uppercase hover:border-accent/40"
+            <button
+              onClick={() => setShowEdit(true)}
+              className="shrink-0 border border-border px-5 py-2 font-mono text-[0.7rem] font-bold tracking-[0.06em] text-text-muted uppercase hover:border-accent/40 hover:text-accent-strong"
             >
-              Edit profile
-            </Link>
+              Update profile
+            </button>
           )}
         </div>
       </header>
@@ -131,6 +137,14 @@ export function ProfileView({ userId }: { userId: string }) {
       {tab === "Posts" && <ProfilePosts userId={user.id} username={user.username} />}
       {tab === "Followers" && <FollowList userId={user.id} kind="followers" />}
       {tab === "Following" && <FollowList userId={user.id} kind="following" />}
+
+      {showEdit && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setShowEdit(false)}
+          onSaved={setUser}
+        />
+      )}
     </div>
   );
 }
