@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
+import { RemoteAvatar } from "@/components/media/remote-image";
 import { useChatSocket, type WsEvent } from "@/hooks/use-chat-socket";
 import { formatTimeAgo } from "@/lib/format";
 import type { Notification, User } from "@nexus/zod";
@@ -100,7 +101,12 @@ export function NotificationsApp() {
               n.isRead ? "border-border bg-surface" : "border-accent/30 bg-accent/5"
             }`}
           >
-            <div className="mt-0.5 h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-accent to-down" />
+            <RemoteAvatar
+              storageKey={actors.get(n.actorId ?? "")?.avatarKey}
+              url={actors.get(n.actorId ?? "")?.avatarUrl}
+              size={32}
+              className="mt-0.5"
+            />
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-[0.84rem] text-text">{describe(n, actors.get(n.actorId ?? ""))}</span>
               <span className="text-[0.7rem] text-text-faint">{formatTimeAgo(n.createdAt)}</span>

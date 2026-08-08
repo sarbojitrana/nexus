@@ -100,7 +100,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-3">
             {people.map((p) => (
               <div key={p.id} className="flex items-center gap-2.5">
-                <RemoteAvatar storageKey={p.avatarKey} size={28} />
+                <RemoteAvatar storageKey={p.avatarKey} url={p.avatarUrl} size={28} />
                 <Link href={`/dashboard/profile/${p.id}`} className="min-w-0 flex-1">
                   <strong className="block truncate text-[0.82rem] font-bold hover:text-accent-strong">
                     @{p.username}

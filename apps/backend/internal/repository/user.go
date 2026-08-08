@@ -36,6 +36,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 				email_id,
 				bio,
 				avatar_key,
+				avatar_url,
 				banner_key
 			)
 		VALUES
@@ -46,6 +47,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 				@email_id,
 				@bio,
 				@avatar_key,
+				@avatar_url,
 				@banner_key
 			)
 		RETURNING
@@ -58,6 +60,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, payload *user.CreateUse
 		"email_id":     payload.EmailID,
 		"bio":          payload.Bio,
 		"avatar_key":   payload.AvatarKey,
+		"avatar_url":   payload.AvatarURL,
 		"banner_key":   payload.BannerKey,
 	})
 
@@ -393,7 +396,7 @@ func (r *UserRepository) GetPostsByUserID(ctx context.Context, viewerID *string,
 func (r *UserRepository) GetUsers(ctx context.Context, viewerID *string, payload *user.GetUsersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
-		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, u.created_at
+		SELECT u.id, u.username, u.display_name, u.avatar_key, u.avatar_url, u.follower_count, u.bio, u.created_at
 		FROM users u
 	`
 	conditions := []string{}
@@ -543,12 +546,22 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-func (r *UserRepository) UpdateUserEmail(ctx context.Context, userID string, email string) (*user.User, error) {
-	stmt := `UPDATE users SET email_id = @email_id WHERE id = @user_id RETURNING *`
+// UpdateFromClerkProfile mirrors the fields Clerk owns onto the local row.
+// avatar_url is only overwritten when Clerk actually has an image, so clearing
+// it there doesn't wipe a picture the user uploaded inside Nexus.
+func (r *UserRepository) UpdateFromClerkProfile(ctx context.Context, userID string, email string, avatarURL *string) (*user.User, error) {
+	stmt := `
+		UPDATE users
+		SET email_id = @email_id,
+			avatar_url = COALESCE(@avatar_url, avatar_url)
+		WHERE id = @user_id
+		RETURNING *
+	`
 
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, pgx.NamedArgs{
-		"user_id":  userID,
-		"email_id": email,
+		"user_id":    userID,
+		"email_id":   email,
+		"avatar_url": avatarURL,
 	})
 
 	if err != nil {
@@ -586,4 +599,67 @@ func (r *UserRepository) IsUserBlocked(ctx context.Context, userID string, block
 
 	return &blocked, nil
 
+}
+
+// BlockUser records a block. Idempotent so repeated clicks don't error --
+// the read paths (feed, profile, search) already filter on this table.
+func (r *UserRepository) BlockUser(ctx context.Context, blockerID, blockedID string) error {
+	_, err := r.server.DB.Pool.Exec(ctx, `
+		INSERT INTO user_blocks (blocker_id, blocked_id)
+		VALUES (@blocker_id, @blocked_id)
+		ON CONFLICT (blocker_id, blocked_id) DO NOTHING
+	`, pgx.NamedArgs{"blocker_id": blockerID, "blocked_id": blockedID})
+	if err != nil {
+		return fmt.Errorf("failed to block user %s: %w", blockedID, err)
+	}
+	return nil
+}
+
+func (r *UserRepository) UnblockUser(ctx context.Context, blockerID, blockedID string) error {
+	_, err := r.server.DB.Pool.Exec(ctx, `
+		DELETE FROM user_blocks WHERE blocker_id = @blocker_id AND blocked_id = @blocked_id
+	`, pgx.NamedArgs{"blocker_id": blockerID, "blocked_id": blockedID})
+	if err != nil {
+		return fmt.Errorf("failed to unblock user %s: %w", blockedID, err)
+	}
+	return nil
+}
+
+func (r *UserRepository) IsBlocking(ctx context.Context, blockerID, blockedID string) (bool, error) {
+	var blocked bool
+	err := r.server.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM user_blocks WHERE blocker_id = @blocker_id AND blocked_id = @blocked_id
+		)
+	`, pgx.NamedArgs{"blocker_id": blockerID, "blocked_id": blockedID}).Scan(&blocked)
+	if err != nil {
+		return false, fmt.Errorf("failed to check block state for %s: %w", blockedID, err)
+	}
+	return blocked, nil
+}
+
+// GetBlockedUsers lists who the caller has blocked, so the block list is
+// manageable from the UI rather than being a one-way door.
+func (r *UserRepository) GetBlockedUsers(ctx context.Context, blockerID string) ([]user.MiniUser, error) {
+	rows, err := r.server.DB.Pool.Query(ctx, `
+		SELECT u.id, u.username, u.display_name, u.avatar_key, u.avatar_url, u.bio, u.follower_count, u.created_at
+		FROM user_blocks ub
+		JOIN users u ON u.id = ub.blocked_id
+		WHERE ub.blocker_id = @blocker_id
+		ORDER BY ub.created_at DESC
+	`, pgx.NamedArgs{"blocker_id": blockerID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list blocked users: %w", err)
+	}
+	defer rows.Close()
+
+	blocked := []user.MiniUser{}
+	for rows.Next() {
+		var m user.MiniUser
+		if err := rows.Scan(&m.ID, &m.Username, &m.DisplayName, &m.AvatarKey, &m.AvatarURL, &m.Bio, &m.FollowerCount, &m.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan blocked user: %w", err)
+		}
+		blocked = append(blocked, m)
+	}
+	return blocked, rows.Err()
 }

@@ -57,6 +57,7 @@ type ParticipantView struct {
 	Username    string     `json:"username"`
 	DisplayName string     `json:"displayName"`
 	AvatarKey   *string    `json:"avatarKey"`
+	AvatarURL   *string    `json:"avatarUrl"`
 	IsOnline    bool       `json:"isOnline"`
 	LastReadAt  *time.Time `json:"lastReadAt,omitempty"`
 }

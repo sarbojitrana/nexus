@@ -19,4 +19,9 @@ func registerUserRoutes(g *echo.Group, h *handler.Handlers, mw *middleware.Middl
 	g.PATCH("/users/me/settings", h.User.UpdateMySettings, mw.Auth.RequireAuth)
 
 	g.POST("/users/me/password-changed", h.User.NotifyPasswordChanged, mw.Auth.RequireAuth)
+
+	g.GET("/users/me/blocks", h.User.GetBlockedUsers, mw.Auth.RequireAuth)
+	g.POST("/users/:id/block", h.User.BlockUser, mw.Auth.RequireAuth)
+	g.DELETE("/users/:id/block", h.User.UnblockUser, mw.Auth.RequireAuth)
+	g.GET("/users/:id/block", h.User.IsBlockingUser, mw.Auth.RequireAuth)
 }

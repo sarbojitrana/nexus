@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useApi } from "@/lib/use-api";
 import { VideoPlayer } from "@/components/media/video-player";
+import { useLightbox } from "@/components/media/lightbox";
 import type { PostMedia } from "@nexus/zod";
 
 // Storage keys aren't URLs -- they're resolved to short-lived signed URLs on
 // demand, batched into one request per gallery.
 export function MediaGallery({ media }: { media: PostMedia[] }) {
   const api = useApi();
+  const openLightbox = useLightbox();
   const [urls, setUrls] = useState<Record<string, string>>({});
 
   const keys = media.map((m) => m.downloadKey).join(",");
@@ -56,7 +58,8 @@ export function MediaGallery({ media }: { media: PostMedia[] }) {
             key={m.id}
             src={url}
             alt=""
-            className="max-h-[520px] w-full border border-border object-contain"
+            onClick={() => openLightbox({ url, kind: "image" })}
+            className="max-h-[520px] w-full cursor-zoom-in border border-border object-contain"
           />
         );
       })}
