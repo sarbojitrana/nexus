@@ -14,7 +14,28 @@ jobs:
           BACKEND_URL: ${{ vars.NEXUS_BACKEND_URL }}
         run: |
           if [ -z "$BACKEND_URL" ]; then
-            echo "Set the NEXUS_BACKEND_URL repo variable (Settings > Secrets and variables > Actions > Variables) to your Render backend URL."
-            exit 1
+            echo "::warning::NEXUS_BACKEND_URL repo variable is not set (Settings > Secrets and variables > Actions > Variables). Nothing to ping."
+            exit 0
           fi
-          curl -fsS --max-time 20 "$BACKEND_URL/status"
+
+          # Render's free tier spins the service down when idle, and the first
+          # request after that cold-starts the container -- measured at ~25s,
+          # and it can be slower under load. A short timeout would fail exactly
+          # when the ping matters most, so allow a generous per-attempt budget
+          # and retry before calling it a real outage.
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 "$BACKEND_URL/status" || echo "000")
+
+            if [ "$code" = "200" ]; then
+              echo "backend healthy (attempt $attempt)"
+              exit 0
+            fi
+
+            echo "attempt $attempt: got HTTP $code"
+            if [ "$attempt" -lt 3 ]; then
+              sleep 20
+            fi
+          done
+
+          echo "::error::$BACKEND_URL/status never returned 200 across 3 attempts -- the backend is likely down."
+          exit 1
