@@ -198,6 +198,39 @@ func (s *UserService) DeleteFromClerk(ctx context.Context, clerkID string) error
 	return nil
 }
 
+// provisionedCacheTTL keeps the "this user has a row" flag around long enough
+// that the existence check costs one Redis hit per user per hour, not a
+// Postgres query on every authenticated request.
+const provisionedCacheTTL = time.Hour
+
+func provisionedCacheKey(userID string) string { return "user:provisioned:" + userID }
+
+// EnsureProvisioned guarantees the caller has a local users row before any
+// handler runs. Every write in the app carries a foreign key to users, so a
+// missing row turns every action into an opaque constraint violation. This
+// runs on each authenticated request (Redis-cached), which makes it immune to
+// whichever endpoint the user happens to hit first.
+func (s *UserService) EnsureProvisioned(ctx context.Context, userID string) {
+	if userID == "" {
+		return
+	}
+
+	var provisioned bool
+	if s.server.Cache.Get(ctx, provisionedCacheKey(userID), &provisioned) && provisioned {
+		return
+	}
+
+	if _, err := s.GetOrProvisionMe(ctx, userID); err != nil {
+		// Deliberately not fatal: the request continues and fails on its own
+		// terms if it genuinely needs the row, rather than 500ing every route.
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("user_id", userID).
+			Msg("failed to ensure user is provisioned")
+		return
+	}
+
+	s.server.Cache.Set(ctx, provisionedCacheKey(userID), true, provisionedCacheTTL)
+}
+
 // GetOrProvisionMe returns the caller's own row, creating it from Clerk if
 // it's missing. The user.created webhook is the normal path, but webhook
 // delivery can fail or be misconfigured -- without this, such an account is

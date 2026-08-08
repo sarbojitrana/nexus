@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -14,6 +15,13 @@ import (
 
 func NewRouter(s *server.Server, h *handler.Handlers, services *service.Services) *echo.Echo {
 	middlewares := middleware.NewMiddlewares(s)
+
+	// Every authenticated request guarantees the caller has a local users row,
+	// so a missing/failed user.created webhook can't leave an account unable
+	// to post, comment, or create anything.
+	middlewares.Auth.OnAuthenticated = func(ctx context.Context, userID string) {
+		services.User.EnsureProvisioned(ctx, userID)
+	}
 
 	router := echo.New()
 

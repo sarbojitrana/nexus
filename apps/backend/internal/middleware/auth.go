@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -14,6 +15,12 @@ import (
 
 type AuthMiddleware struct {
 	server *server.Server
+
+	// OnAuthenticated runs after a request is successfully authenticated.
+	// The router wires this to user provisioning; it lives here as a callback
+	// rather than a direct call because internal/service already imports this
+	// package, so importing it back would be a cycle.
+	OnAuthenticated func(ctx context.Context, userID string)
 }
 
 func NewAuthMiddleware(s *server.Server) *AuthMiddleware {
@@ -67,6 +74,10 @@ func (auth *AuthMiddleware) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc 
 		c.Set("user_id", claims.Subject)
 		c.Set("user_role", claims.ActiveOrganizationRole)
 		c.Set("permissions", claims.Claims.ActiveOrganizationPermissions)
+
+		if auth.OnAuthenticated != nil {
+			auth.OnAuthenticated(c.Request().Context(), claims.Subject)
+		}
 
 		auth.server.Logger.Info().
 			Str("function", "RequireAuth").
