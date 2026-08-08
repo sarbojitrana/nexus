@@ -7,6 +7,7 @@ import { useApi } from "@/lib/use-api";
 import { useUpload } from "@/lib/use-upload";
 import { apiErrorMessage } from "@/lib/api-error";
 import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
+import { ZoomableAvatar, ZoomableBanner } from "@/components/media/zoomable";
 import { NewPostButton } from "@/components/new-post-modal";
 import { formatTimeAgo } from "@/lib/format";
 import type {
@@ -82,9 +83,9 @@ export function CommunityDetail({ slug }: { slug: string }) {
       )}
 
       <header className="border border-border bg-surface">
-        <RemoteBanner storageKey={community.bannerKey} className="h-28 border-b border-border" />
+        <ZoomableBanner storageKey={community.bannerKey} className="h-28 border-b border-border" />
         <div className="flex flex-wrap items-start gap-4 p-5">
-          <RemoteAvatar storageKey={community.avatarKey} size={64} className="-mt-11 border-2 border-surface" />
+          <ZoomableAvatar storageKey={community.avatarKey} size={64} className="-mt-11 border-2 border-surface" />
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[1.35rem] font-extrabold">n/{community.slug}</h1>
             <p className="mt-0.5 text-[0.86rem] text-text-muted">{community.name}</p>
@@ -271,11 +272,14 @@ function CommunityMembers({
           key={m.userId}
           className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3.5"
         >
-          <RemoteAvatar storageKey={m.avatarKey} size={32} />
+          <RemoteAvatar storageKey={m.avatarKey} url={m.avatarUrl} size={32} />
           <Link href={`/dashboard/profile/${m.userId}`} className="min-w-0 flex-1">
             <strong className="block truncate text-[0.86rem] font-bold hover:text-accent-strong">
               {m.name}
             </strong>
+            <span className="block truncate font-mono text-[0.7rem] text-text-muted">
+              @{m.username}
+            </span>
             <span className="font-mono text-[0.66rem] text-text-faint">
               {m.role} · joined {formatTimeAgo(m.joinedAt)}
             </span>
@@ -318,6 +322,7 @@ function CommunityModeration({ community }: { community: CommunityResponse }) {
   const api = useApi();
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [statusFilter, setStatusFilter] = useState<"pending" | "resolved" | "dismissed">("pending");
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -335,11 +340,17 @@ function CommunityModeration({ community }: { community: CommunityResponse }) {
   }, [load]);
 
   async function resolve(reportId: string, updatedStatus: "resolved" | "dismissed") {
+    setError(null);
     const res = await api.Community.resolveReport({
       params: { id: community.id, reportId },
       body: { updatedStatus },
     }).catch(() => null);
-    if (res) load();
+
+    if (res && res.status === 200) {
+      load();
+      return;
+    }
+    setError(apiErrorMessage(res, "Couldn't update that report."));
   }
 
   return (
@@ -359,6 +370,12 @@ function CommunityModeration({ community }: { community: CommunityResponse }) {
           </button>
         ))}
       </div>
+
+      {error && (
+        <p className="border border-accent/30 bg-accent/5 px-3 py-2 font-mono text-[0.72rem] text-accent-strong">
+          {error}
+        </p>
+      )}
 
       {isLoading && <p className="font-mono text-[0.76rem] text-text-faint">loading…</p>}
 

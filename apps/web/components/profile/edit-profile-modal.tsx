@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useClerk } from "@clerk/nextjs";
+import { useEffect, useRef, useState } from "react";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { useUpload } from "@/lib/use-upload";
 import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
-import type { User } from "@nexus/zod";
+import type { User, MiniUser } from "@nexus/zod";
 
 // Everything Nexus owns about a user lives here -- bio, username, banner, and
 // the privacy settings. Clerk's own "Manage account" covers name, email,
@@ -22,6 +22,7 @@ export function EditProfileModal({
   const api = useApi();
   const upload = useUpload();
   const { signOut, openUserProfile } = useClerk();
+  const { user: clerkUser } = useUser();
   const avatarInput = useRef<HTMLInputElement>(null);
   const bannerInput = useRef<HTMLInputElement>(null);
 
@@ -40,6 +41,20 @@ export function EditProfileModal({
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [blocked, setBlocked] = useState<MiniUser[]>([]);
+
+  useEffect(() => {
+    api.User.getBlockedUsers()
+      .then((res) => {
+        if (res.status === 200) setBlocked(res.body);
+      })
+      .catch(() => {});
+  }, [api]);
+
+  async function unblock(id: string) {
+    const res = await api.User.unblockUser({ params: { id } }).catch(() => null);
+    if (res && res.status === 204) setBlocked((prev) => prev.filter((u) => u.id !== id));
+  }
 
   async function handleImage(file: File | undefined, target: "avatar" | "banner") {
     if (!file) return;
@@ -50,8 +65,20 @@ export function EditProfileModal({
       setMessage(result.error);
       return;
     }
-    if (target === "avatar") setAvatarKey(result.media.storageKey);
-    else setBannerKey(result.media.storageKey);
+    if (target === "avatar") {
+      setAvatarKey(result.media.storageKey);
+      // Clerk is where the picture is shown in its own account widget, and
+      // where most people change it. Pushing it there too keeps the two from
+      // drifting apart depending on which side you uploaded from.
+      try {
+        await clerkUser?.setProfileImage({ file });
+      } catch {
+        setMessage("Uploaded, but couldn't sync the picture to your account.");
+        return;
+      }
+    } else {
+      setBannerKey(result.media.storageKey);
+    }
     setMessage("Image uploaded — save to apply.");
   }
 
@@ -107,7 +134,7 @@ export function EditProfileModal({
 
         <div className="flex flex-wrap items-center gap-5">
           <div className="flex flex-col items-center gap-2">
-            <RemoteAvatar storageKey={avatarKey} size={56} />
+            <RemoteAvatar storageKey={avatarKey} url={clerkUser?.imageUrl} size={56} />
             <button
               onClick={() => avatarInput.current?.click()}
               disabled={isUploading}
@@ -237,6 +264,35 @@ export function EditProfileModal({
               {isSaving ? "Saving…" : "Save"}
             </button>
           </div>
+        </div>
+
+        <div className="border-t border-border-soft pt-4">
+          <div className="eyebrow mb-3">Blocked accounts</div>
+          {blocked.length === 0 ? (
+            <p className="font-mono text-[0.72rem] text-text-faint">
+              You haven&apos;t blocked anyone.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {blocked.map((u) => (
+                <div
+                  key={u.id}
+                  className="flex items-center justify-between gap-3 border border-border bg-surface px-3 py-2"
+                >
+                  <span className="min-w-0 truncate text-[0.84rem]">
+                    @{u.username}{" "}
+                    <span className="text-text-faint">{u.displayName}</span>
+                  </span>
+                  <button
+                    onClick={() => unblock(u.id)}
+                    className="shrink-0 border border-border px-3 py-1 font-mono text-[0.64rem] font-bold tracking-[0.05em] text-text-muted uppercase hover:border-accent hover:text-accent-strong"
+                  >
+                    Unblock
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border border-accent/30 bg-accent/5 p-3.5">

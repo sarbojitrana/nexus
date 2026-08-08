@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { formatCount, formatTimeAgo } from "@/lib/format";
+import { notify } from "@/lib/notify";
+import { apiErrorMessage } from "@/lib/api-error";
 import type { PostCardData } from "@/lib/post-card-data";
 
 export function PostCard({ post, hideCommunity }: { post: PostCardData; hideCommunity?: boolean }) {
@@ -13,6 +15,37 @@ export function PostCard({ post, hideCommunity }: { post: PostCardData; hideComm
   // "my vote" field on the post, so the UI tracks the delta locally.
   const [vote, setVote] = useState<"upvote" | "downvote" | null>(null);
   const [delta, setDelta] = useState(0);
+
+  const [isCommenting, setIsCommenting] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [commentCount, setCommentCount] = useState(post.commentCount);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submitComment() {
+    if (!commentText.trim()) return;
+    setIsSending(true);
+    setError(null);
+
+    const res = await api.Post.createPost({
+      body: {
+        postType: "comment",
+        parentPostId: post.id,
+        content: commentText.trim(),
+        title: null,
+      },
+    }).catch(() => null);
+    setIsSending(false);
+
+    if (res && res.status === 201) {
+      setCommentText("");
+      setIsCommenting(false);
+      setCommentCount((c) => c + 1);
+      notify("Comment added", post.title ?? "Your comment was posted.");
+      return;
+    }
+    setError(apiErrorMessage(res, "Couldn't post that comment."));
+  }
 
   async function react(reaction: "upvote" | "downvote") {
     const previous = vote;
@@ -94,11 +127,49 @@ export function PostCard({ post, hideCommunity }: { post: PostCardData; hideComm
 
         <MediaGallery media={post.media} />
 
-        <div className="mt-3 flex gap-4 font-mono text-[0.7rem] text-text-faint">
+        <div className="mt-3 flex flex-wrap gap-4 font-mono text-[0.7rem] text-text-faint">
+          <button
+            onClick={() => setIsCommenting((v) => !v)}
+            className="hover:text-accent-strong"
+          >
+            comment
+          </button>
           <Link href={`/dashboard/posts/${post.id}`} className="hover:text-text-muted">
-            {post.commentCount} comments
+            {commentCount} comments
           </Link>
         </div>
+
+        {isCommenting && (
+          <div className="mt-2.5 flex flex-col gap-2">
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              rows={2}
+              autoFocus
+              placeholder="Write a comment…"
+              className="resize-none border border-border bg-bg px-3 py-2 text-[0.84rem] placeholder:text-text-faint focus:border-accent focus:outline-none"
+            />
+            {error && <p className="font-mono text-[0.68rem] text-accent-strong">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={submitComment}
+                disabled={isSending || !commentText.trim()}
+                className="bg-accent px-3 py-1.5 font-mono text-[0.66rem] font-bold tracking-[0.05em] text-accent-text uppercase disabled:opacity-50"
+              >
+                {isSending ? "Posting…" : "Comment"}
+              </button>
+              <button
+                onClick={() => {
+                  setIsCommenting(false);
+                  setError(null);
+                }}
+                className="px-3 py-1.5 font-mono text-[0.66rem] tracking-[0.05em] text-text-muted uppercase"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </article>
   );

@@ -236,7 +236,7 @@ func (r *FollowRepository) UnFollowUser(ctx context.Context, userID string, payl
 func (r *FollowRepository) GetFollowers(ctx context.Context, viewerID *string, userID string, query *follow.GetFollowersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
-		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, uf.created_at
+		SELECT u.id, u.username, u.display_name, u.avatar_key, u.avatar_url, u.follower_count, u.bio, uf.created_at
 		FROM user_follows uf
 		JOIN users u ON u.id = uf.follower_id
 		WHERE uf.following_id = @user_id
@@ -314,7 +314,7 @@ func (r *FollowRepository) GetFollowers(ctx context.Context, viewerID *string, u
 func (r *FollowRepository) GetFollowing(ctx context.Context, viewerID *string, userID string, query *follow.GetFollowersQuery) (*model.CursorPaginatedResponse[user.MiniUser], error) {
 
 	stmt := `
-		SELECT u.id, u.username, u.display_name, u.avatar_key, u.follower_count, u.bio, uf.created_at
+		SELECT u.id, u.username, u.display_name, u.avatar_key, u.avatar_url, u.follower_count, u.bio, uf.created_at
 		FROM user_follows uf
 		JOIN users u ON u.id = uf.following_id
 		WHERE uf.follower_id = @user_id

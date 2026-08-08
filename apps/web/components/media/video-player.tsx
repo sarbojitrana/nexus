@@ -11,6 +11,7 @@ function formatTime(seconds: number) {
 
 export function VideoPlayer({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -76,10 +77,24 @@ export function VideoPlayer({ src }: { src: string }) {
     setProgress(next);
   }
 
+  function toggleFullscreen() {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+      return;
+    }
+    // Fullscreen the wrapper rather than the <video> so the custom controls
+    // come along -- fullscreening the element alone hands over to the browser's
+    // native chrome and hides them.
+    container.requestFullscreen?.().catch(() => {});
+  }
+
   const pct = duration > 0 ? (progress / duration) * 100 : 0;
 
   return (
-    <div className="group relative border border-border bg-black">
+    <div ref={containerRef} className="group relative border border-border bg-black">
       <video
         ref={videoRef}
         src={src}
@@ -87,7 +102,7 @@ export function VideoPlayer({ src }: { src: string }) {
         playsInline
         preload="metadata"
         onClick={togglePlay}
-        className="max-h-[520px] w-full cursor-pointer object-contain"
+        className="max-h-[520px] w-full cursor-pointer object-contain fullscreen:max-h-full fullscreen:h-full"
       />
 
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-2.5 bg-gradient-to-t from-black/85 to-transparent px-3 pt-8 pb-2.5">
@@ -128,6 +143,14 @@ export function VideoPlayer({ src }: { src: string }) {
           className="shrink-0 font-mono text-[0.78rem] text-white hover:text-accent-strong"
         >
           {isMuted ? "🔇" : "🔊"}
+        </button>
+
+        <button
+          onClick={toggleFullscreen}
+          aria-label="Full screen"
+          className="shrink-0 font-mono text-[0.8rem] text-white hover:text-accent-strong"
+        >
+          ⛶
         </button>
       </div>
     </div>

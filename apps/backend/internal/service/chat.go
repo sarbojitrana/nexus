@@ -214,6 +214,7 @@ func (s *ChatService) buildSummary(ctx context.Context, viewerID string, conv *c
 			Username:    u.Username,
 			DisplayName: u.DisplayName,
 			AvatarKey:   u.AvatarKey,
+			AvatarURL:   u.AvatarURL,
 			IsOnline:    u.ShowOnlineStatus && s.hub != nil && s.hub.IsOnline(p.UserID),
 		}
 		if p.UserID == viewerID || u.ShareReadReceipts {

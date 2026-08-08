@@ -5,6 +5,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/sarbojitrana/nexus/internal/errs"
 	"github.com/sarbojitrana/nexus/internal/middleware"
 	"github.com/sarbojitrana/nexus/internal/model"
 	"github.com/sarbojitrana/nexus/internal/model/post"
@@ -72,6 +73,40 @@ func (h *UserHandler) UpdateMe(c echo.Context) error {
 	return Handle(h.Handler, func(c echo.Context, req *user.UpdateUserPayload) (*user.User, error) {
 		return h.services.User.UpdateProfile(c.Request().Context(), middleware.GetUserID(c), req)
 	}, http.StatusOK, &user.UpdateUserPayload{})(c)
+}
+
+func (h *UserHandler) BlockUser(c echo.Context) error {
+	return HandleNoContent(h.Handler, func(c echo.Context, req *model.Empty) error {
+		return h.services.User.BlockUser(c.Request().Context(), middleware.GetUserID(c), c.Param("id"))
+	}, http.StatusNoContent, &model.Empty{})(c)
+}
+
+func (h *UserHandler) UnblockUser(c echo.Context) error {
+	return HandleNoContent(h.Handler, func(c echo.Context, req *model.Empty) error {
+		return h.services.User.UnblockUser(c.Request().Context(), middleware.GetUserID(c), c.Param("id"))
+	}, http.StatusNoContent, &model.Empty{})(c)
+}
+
+// IsBlockingUser mirrors the follow-check convention: 204 when true, 404 when
+// not, so the client can branch on status without a body.
+func (h *UserHandler) IsBlockingUser(c echo.Context) error {
+	return HandleNoContent(h.Handler, func(c echo.Context, req *model.Empty) error {
+		blocked, err := h.services.User.IsBlocking(c.Request().Context(), middleware.GetUserID(c), c.Param("id"))
+		if err != nil {
+			return err
+		}
+		if !blocked {
+			code := "NOT_BLOCKED"
+			return errs.NewNotFoundError("user is not blocked", false, &code)
+		}
+		return nil
+	}, http.StatusNoContent, &model.Empty{})(c)
+}
+
+func (h *UserHandler) GetBlockedUsers(c echo.Context) error {
+	return Handle(h.Handler, func(c echo.Context, req *model.Empty) ([]user.MiniUser, error) {
+		return h.services.User.GetBlockedUsers(c.Request().Context(), middleware.GetUserID(c))
+	}, http.StatusOK, &model.Empty{})(c)
 }
 
 func (h *UserHandler) DeleteMe(c echo.Context) error {

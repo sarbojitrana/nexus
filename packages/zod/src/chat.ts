@@ -40,6 +40,7 @@ export const ZParticipantView = z.object({
   username: z.string(),
   displayName: z.string(),
   avatarKey: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
   isOnline: z.boolean(),
   lastReadAt: z.string().datetime().optional(),
 });

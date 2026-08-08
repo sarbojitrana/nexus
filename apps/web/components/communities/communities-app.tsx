@@ -14,6 +14,7 @@ export function CommunitiesApp() {
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(
     async (name: string) => {
@@ -21,7 +22,21 @@ export function CommunitiesApp() {
       const res = await api.Community.getCommunities({ query: { name: name || undefined } }).catch(
         () => null
       );
-      if (res && res.status === 200) setCommunities(res.body.data);
+      if (res && res.status === 200) {
+        setCommunities(res.body.data);
+
+        // The list payload has no viewer role, so membership is resolved per
+        // community -- otherwise every row would read "Join" even for ones
+        // you're already in.
+        const roles = await Promise.all(
+          res.body.data.map((c) =>
+            api.Community.getCommunityByIdOrSlug({ params: { idOrSlug: c.communityId } })
+              .then((r) => (r.status === 200 && r.body.viewerRole ? c.communityId : null))
+              .catch(() => null)
+          )
+        );
+        setJoinedIds(new Set(roles.filter((id): id is string => !!id)));
+      }
       setIsLoading(false);
     },
     [api]
@@ -32,9 +47,25 @@ export function CommunitiesApp() {
     return () => clearTimeout(timer);
   }, [query, load]);
 
-  async function join(communityId: string) {
-    const res = await api.Community.joinCommunity({ params: { id: communityId } }).catch(() => null);
-    if (res) setJoinedIds((prev) => new Set(prev).add(communityId));
+  async function toggleMembership(communityId: string) {
+    if (busyId) return;
+    setBusyId(communityId);
+    const joined = joinedIds.has(communityId);
+
+    const res = await (joined
+      ? api.Community.leaveCommunity({ params: { id: communityId } })
+      : api.Community.joinCommunity({ params: { id: communityId } })
+    ).catch(() => null);
+    setBusyId(null);
+
+    if (res && (res.status === 200 || res.status === 201 || res.status === 204)) {
+      setJoinedIds((prev) => {
+        const next = new Set(prev);
+        if (joined) next.delete(communityId);
+        else next.add(communityId);
+        return next;
+      });
+    }
   }
 
   return (
@@ -78,9 +109,13 @@ export function CommunitiesApp() {
                 </span>
               </Link>
               <button
-                onClick={() => join(c.communityId)}
-                disabled={joinedIds.has(c.communityId)}
-                className="shrink-0 border border-border px-4 py-2 font-mono text-[0.7rem] font-bold tracking-[0.05em] text-text-muted uppercase hover:border-accent hover:text-accent-strong disabled:opacity-50"
+                onClick={() => toggleMembership(c.communityId)}
+                disabled={busyId === c.communityId}
+                className={`shrink-0 border px-4 py-2 font-mono text-[0.7rem] font-bold tracking-[0.05em] uppercase disabled:opacity-50 ${
+                  joinedIds.has(c.communityId)
+                    ? "border-accent/50 text-accent-strong hover:bg-accent/10"
+                    : "border-border text-text-muted hover:border-accent hover:text-accent-strong"
+                }`}
               >
                 {joinedIds.has(c.communityId) ? "Joined" : "Join"}
               </button>
