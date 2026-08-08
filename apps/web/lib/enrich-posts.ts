@@ -1,5 +1,5 @@
 import { getServerApi } from "@/lib/api-server";
-import { toPostCardData, type PostCardData } from "@/components/post-card";
+import { toPostCardData, type PostCardData } from "@/lib/post-card-data";
 import type { PopulatedPost } from "@nexus/zod";
 
 // The feed/post endpoints return raw author and community ids. Rather than
