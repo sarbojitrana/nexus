@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
+import { useUpload } from "@/lib/use-upload";
+import { apiErrorMessage } from "@/lib/api-error";
+import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
 import { NewPostButton } from "@/components/new-post-modal";
 import { formatTimeAgo } from "@/lib/format";
 import type {
@@ -71,16 +74,17 @@ export function CommunityDetail({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-6 py-6">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 px-6 py-6">
       {banner && (
         <div className="border border-accent/40 bg-accent/5 px-4 py-2.5 font-mono text-[0.74rem] text-accent-strong">
           {banner}
         </div>
       )}
 
-      <header className="border border-border bg-surface p-5">
-        <div className="flex flex-wrap items-start gap-4">
-          <span className="h-14 w-14 shrink-0 bg-accent" />
+      <header className="border border-border bg-surface">
+        <RemoteBanner storageKey={community.bannerKey} className="h-28 border-b border-border" />
+        <div className="flex flex-wrap items-start gap-4 p-5">
+          <RemoteAvatar storageKey={community.avatarKey} size={64} className="-mt-11 border-2 border-surface" />
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[1.35rem] font-extrabold">n/{community.slug}</h1>
             <p className="mt-0.5 text-[0.86rem] text-text-muted">{community.name}</p>
@@ -156,20 +160,12 @@ function CommunityPosts({
   const [posts, setPosts] = useState<PopulatedPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // There's no "posts by community" endpoint -- the feed is the only source,
-  // so this filters the trending lane down to this community.
   const load = useCallback(async () => {
-    const res = await api.Post.getFeed({ query: {} }).catch(() => null);
-    if (res && res.status === 200) {
-      const all = [
-        ...res.body.trendingPosts,
-        ...res.body.followingCommunitiesPosts,
-        ...res.body.followingUsersPosts,
-      ];
-      const byId = new Map<string, PopulatedPost>();
-      all.filter((p) => p.communityId === community.id).forEach((p) => byId.set(p.id, p));
-      setPosts([...byId.values()]);
-    }
+    const res = await api.Community.getCommunityPosts({
+      params: { id: community.id },
+      query: {},
+    }).catch(() => null);
+    if (res && res.status === 200) setPosts(res.body.data);
     setIsLoading(false);
   }, [api, community.id]);
 
@@ -275,7 +271,7 @@ function CommunityMembers({
           key={m.userId}
           className="flex flex-wrap items-center gap-3 border border-border bg-surface p-3.5"
         >
-          <span className="h-8 w-8 shrink-0 bg-accent" />
+          <RemoteAvatar storageKey={m.avatarKey} size={32} />
           <Link href={`/dashboard/profile/${m.userId}`} className="min-w-0 flex-1">
             <strong className="block truncate text-[0.86rem] font-bold hover:text-accent-strong">
               {m.name}
@@ -418,25 +414,52 @@ function CommunitySettings({
   onDeleted: () => void;
 }) {
   const api = useApi();
+  const upload = useUpload();
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const bannerInput = useRef<HTMLInputElement>(null);
+
   const [name, setName] = useState(community.name);
   const [description, setDescription] = useState(community.description ?? "");
+  const [avatarKey, setAvatarKey] = useState(community.avatarKey);
+  const [bannerKey, setBannerKey] = useState(community.bannerKey);
+  const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function handleImage(file: File | undefined, target: "avatar" | "banner") {
+    if (!file) return;
+    setIsUploading(true);
+    setMessage(null);
+    const result = await upload(file);
+    setIsUploading(false);
+    if (!result.ok) {
+      setMessage(result.error);
+      return;
+    }
+    if (target === "avatar") setAvatarKey(result.media.storageKey);
+    else setBannerKey(result.media.storageKey);
+    setMessage("Image uploaded — save to apply.");
+  }
 
   async function save() {
     setIsSaving(true);
     setMessage(null);
     const res = await api.Community.updateCommunitySettings({
       params: { id: community.id },
-      body: { name: name.trim(), description: description.trim() || null },
+      body: {
+        name: name.trim(),
+        description: description.trim() || null,
+        avatarKey,
+        bannerKey,
+      },
     }).catch(() => null);
     setIsSaving(false);
     if (res && res.status === 200) {
       setMessage("Saved.");
       onSaved();
     } else {
-      setMessage("Couldn't save changes.");
+      setMessage(apiErrorMessage(res, "Couldn't save changes."));
     }
   }
 
@@ -450,6 +473,43 @@ function CommunitySettings({
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-5 border border-border bg-surface p-4">
+        <div className="flex flex-col items-center gap-2">
+          <RemoteAvatar storageKey={avatarKey} size={56} />
+          <button
+            onClick={() => avatarInput.current?.click()}
+            disabled={isUploading}
+            className="font-mono text-[0.64rem] tracking-[0.05em] text-accent-strong uppercase hover:underline disabled:opacity-50"
+          >
+            Icon
+          </button>
+          <input
+            ref={avatarInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleImage(e.target.files?.[0], "avatar")}
+          />
+        </div>
+        <div className="flex min-w-[160px] flex-1 flex-col items-center gap-2">
+          <RemoteBanner storageKey={bannerKey} className="h-14" />
+          <button
+            onClick={() => bannerInput.current?.click()}
+            disabled={isUploading}
+            className="font-mono text-[0.64rem] tracking-[0.05em] text-accent-strong uppercase hover:underline disabled:opacity-50"
+          >
+            Cover
+          </button>
+          <input
+            ref={bannerInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleImage(e.target.files?.[0], "banner")}
+          />
+        </div>
+      </div>
+
       <label className="flex flex-col gap-1.5">
         <span className="eyebrow">Name</span>
         <input

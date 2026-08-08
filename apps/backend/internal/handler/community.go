@@ -101,6 +101,16 @@ func (h *CommunityHandler) GetMembers(c echo.Context) error {
 	}, http.StatusOK, &community.GetCommunityMembersQuery{})(c)
 }
 
+func (h *CommunityHandler) GetCommunityPosts(c echo.Context) error {
+	return Handle(h.Handler, func(c echo.Context, req *community.GetCommunityPostsQuery) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+		communityID, err := parseUUIDParam(c, "id")
+		if err != nil {
+			return nil, err
+		}
+		return h.services.Community.GetCommunityPosts(c.Request().Context(), viewerIDFromContext(c), communityID, req.CursorCreatedAt)
+	}, http.StatusOK, &community.GetCommunityPostsQuery{})(c)
+}
+
 func (h *CommunityHandler) GetCommunityPostByID(c echo.Context) error {
 	return Handle(h.Handler, func(c echo.Context, req *model.Empty) (*post.PopulatedPost, error) {
 		communityID, err := parseUUIDParam(c, "id")

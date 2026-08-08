@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/use-api";
 import { apiErrorMessage } from "@/lib/api-error";
+import { RemoteAvatar } from "@/components/media/remote-image";
 import type { MiniCommunity } from "@nexus/zod";
 
 export function CommunitiesApp() {
@@ -37,7 +38,7 @@ export function CommunitiesApp() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 px-6 py-8">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-[1.4rem] font-extrabold">Communities</h1>
         <button
@@ -64,7 +65,7 @@ export function CommunitiesApp() {
               key={c.communityId}
               className="flex items-center gap-3 border border-border bg-surface p-4"
             >
-              <div className="h-11 w-11 shrink-0 bg-accent" />
+              <RemoteAvatar storageKey={c.communityAvatarKey} size={44} />
               <Link
                 href={`/dashboard/communities/${c.slug}`}
                 className="flex min-w-0 flex-1 flex-col gap-0.5"

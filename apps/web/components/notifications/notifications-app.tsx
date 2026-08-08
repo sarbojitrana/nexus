@@ -76,7 +76,7 @@ export function NotificationsApp() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[620px] flex-col gap-4 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-8">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-[1.4rem] font-extrabold">Notifications</h1>
         {notifications.some((n) => !n.isRead) && (

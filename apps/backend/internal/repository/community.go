@@ -140,6 +140,11 @@ func (r *CommunityRepository) UpdateCommunitySettings(ctx context.Context, commu
 		return nil, errs.NewBadRequestError("No fields provided to update", false, &code, nil, nil)
 	}
 
+	stmt += strings.Join(setClauses, ", ") + `
+		WHERE id = @community_id
+		RETURNING *
+	`
+
 	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update the community settings for community_id %s: %w", communityID, err)
@@ -1028,3 +1033,75 @@ func (r *CommunityRepository) LeaveCommunity(ctx context.Context, userID string,
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+// GetCommunityPosts lists a community's own top-level posts. The feed can't
+// answer this -- it's windowed, capped, and scoped to what the viewer
+// follows -- so a community page needs its own query.
+func (r *CommunityRepository) GetCommunityPosts(ctx context.Context, viewerID *string, communityID uuid.UUID, cursorCreatedAt *time.Time) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+	limit := 20
+
+	stmt := `
+		SELECT p.*,
+		COALESCE(
+			jsonb_agg(
+				to_json(camel(pm))
+				ORDER BY pm.created_at ASC
+			) FILTER(WHERE pm.id IS NOT NULL),
+			'[]'::jsonb
+		) AS post_media
+		FROM posts p
+		LEFT JOIN post_media pm ON pm.post_id = p.id
+		WHERE p.community_id = @community_id
+			AND p.parent_post_id IS NULL
+			AND p.deleted_at IS NULL
+	`
+
+	args := pgx.NamedArgs{
+		"community_id":   communityID,
+		"limit_plus_one": limit + 1,
+	}
+
+	if viewerID != nil {
+		args["viewer_id"] = *viewerID
+		stmt += `
+			AND NOT EXISTS (
+				SELECT 1 FROM user_blocks ub
+				WHERE (ub.blocker_id = @viewer_id AND ub.blocked_id = p.author_id)
+				   OR (ub.blocker_id = p.author_id AND ub.blocked_id = @viewer_id)
+			)
+		`
+	}
+
+	if cursorCreatedAt != nil {
+		args["cursor_created_at"] = *cursorCreatedAt
+		stmt += " AND p.created_at <= @cursor_created_at"
+	}
+
+	stmt += " GROUP BY p.id ORDER BY p.created_at DESC LIMIT @limit_plus_one"
+
+	rows, err := r.server.DB.Pool.Query(ctx, stmt, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query community posts for community_id %s: %w", communityID, err)
+	}
+
+	posts, err := pgx.CollectRows(rows, pgx.RowToStructByName[post.PopulatedPost])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse community posts for community_id %s: %w", communityID, err)
+	}
+
+	if len(posts) < limit+1 {
+		var cursor time.Time
+		if cursorCreatedAt != nil {
+			cursor = *cursorCreatedAt
+		}
+		return &model.CursorPaginatedResponse[post.PopulatedPost]{
+			Data: posts, CursorCreatedAt: cursor, HasMore: false,
+		}, nil
+	}
+
+	return &model.CursorPaginatedResponse[post.PopulatedPost]{
+		Data:            posts[:limit],
+		CursorCreatedAt: posts[limit].CreatedAt,
+		HasMore:         true,
+	}, nil
+}

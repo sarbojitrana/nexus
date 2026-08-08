@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
+import { useUpload } from "@/lib/use-upload";
 import { formatTimeAgo } from "@/lib/format";
 import { InviteToGroupModal } from "@/components/chat/invite-modal";
 import { ChatAttachment } from "@/components/chat/chat-attachment";
@@ -18,10 +19,12 @@ export function MessageThread({
   onMessageSent: (message: Message) => void;
 }) {
   const api = useApi();
+  const upload = useUpload();
   const { userId } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,29 +42,22 @@ export function MessageThread({
     const trimmed = text.trim();
     if (!trimmed && !file) return;
     setIsSending(true);
+    setError(null);
 
     let attachmentKey: string | undefined;
     let attachmentMimeType: string | undefined;
     let attachmentFileSize: number | undefined;
 
     if (file) {
-      const presign = await api.Storage.presignUpload({
-        body: { mimeType: file.type || "application/octet-stream" },
-      }).catch(() => null);
-      if (presign && presign.status === 200) {
-        const uploadOk = await fetch(presign.body.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file,
-        })
-          .then((r) => r.ok)
-          .catch(() => false);
-        if (uploadOk) {
-          attachmentKey = presign.body.key;
-          attachmentMimeType = file.type || "application/octet-stream";
-          attachmentFileSize = file.size;
-        }
+      const result = await upload(file);
+      if (!result.ok) {
+        setError(result.error);
+        setIsSending(false);
+        return;
       }
+      attachmentKey = result.media.storageKey;
+      attachmentMimeType = result.media.mimeType;
+      attachmentFileSize = result.media.fileSize;
     }
 
     const res = await api.Chat.sendMessage({
@@ -140,6 +136,11 @@ export function MessageThread({
         )}
         <div ref={bottomRef} />
       </div>
+      {error && (
+        <p className="border-t border-border-soft px-3 pt-2 font-mono text-[0.7rem] text-accent-strong">
+          {error}
+        </p>
+      )}
 
       <div className="flex items-center gap-2 border-t border-border-soft px-3 py-3">
         <button
