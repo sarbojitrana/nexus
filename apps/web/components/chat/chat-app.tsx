@@ -115,31 +115,33 @@ export function ChatApp() {
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
   return (
-    <div className="grid h-[calc(100dvh-0px)] grid-cols-1 md:grid-cols-[280px_1fr]">
+    <div className="grid h-[calc(100dvh-0px)] grid-cols-1 md:grid-cols-[340px_1fr]">
       <div className="flex flex-col border-r border-border-soft">
-        <div className="flex items-center justify-between px-4 py-3.5">
-          <strong className="text-[0.95rem] font-bold">Messages</strong>
-          <div className="flex gap-1.5">
+        <div className="flex flex-col gap-3 border-b border-border-soft px-4 py-3.5">
+          <div className="flex items-center justify-between">
+            <strong className="font-display text-[1rem] font-extrabold">Messages</strong>
             <button
               onClick={() => setShowInvitations((v) => !v)}
-              className="relative rounded-[9px] border border-border px-2.5 py-1.5 text-[0.72rem] font-bold text-text-muted hover:bg-surface"
+              className="relative border border-border px-3 py-1.5 font-mono text-[0.68rem] font-bold tracking-[0.06em] text-text-muted uppercase hover:border-accent/40 hover:text-text"
             >
               Invites
               {invitations.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[0.6rem] font-bold text-accent-text">
+                <span className="absolute -top-2 -right-2 flex h-4 min-w-4 items-center justify-center bg-accent px-1 font-mono text-[0.6rem] font-bold text-accent-text">
                   {invitations.length}
                 </span>
               )}
             </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setShowMessageModal(true)}
-              className="rounded-[9px] border border-border px-2.5 py-1.5 text-[0.72rem] font-bold text-text-muted hover:bg-surface"
+              className="border border-border px-3 py-2 font-mono text-[0.68rem] font-bold tracking-[0.06em] text-text-muted uppercase whitespace-nowrap hover:border-accent/40 hover:text-text"
             >
               + Message
             </button>
             <button
               onClick={() => setShowGroupModal(true)}
-              className="rounded-[9px] bg-accent px-2.5 py-1.5 text-[0.72rem] font-bold text-accent-text hover:bg-accent-strong"
+              className="bg-accent px-3 py-2 font-mono text-[0.68rem] font-bold tracking-[0.06em] text-accent-text uppercase whitespace-nowrap hover:bg-accent-strong"
             >
               + Group
             </button>
@@ -222,7 +224,10 @@ export function ChatApp() {
             conversation={selected}
             messages={messages}
             onMessageSent={(m) => {
-              setMessages((prev) => [...prev, m]);
+              // The server broadcasts every message back over the socket,
+              // including to the sender, so this and the WS handler race --
+              // whichever loses would otherwise append a duplicate.
+              setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
               loadConversations();
             }}
           />

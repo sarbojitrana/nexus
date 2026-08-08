@@ -238,3 +238,11 @@ func (p *GetCommunityReportsQuery) Validate() error {
 
 	return nil
 }
+
+type GetCommunityPostsQuery struct {
+	CursorCreatedAt *time.Time `query:"cursorCreatedAt"`
+}
+
+func (p *GetCommunityPostsQuery) Validate() error {
+	return validator.New().Struct(p)
+}

@@ -157,7 +157,7 @@ export function PostDetail({ postId }: { postId: string }) {
   const score = post.upvotes - post.downvotes;
 
   return (
-    <div className="mx-auto flex w-full max-w-[680px] flex-col gap-4 px-6 py-6">
+    <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
       {banner && (
         <div className="border border-accent/40 bg-accent/5 px-4 py-2.5 font-mono text-[0.74rem] text-accent-strong">
           {banner}

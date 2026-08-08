@@ -137,3 +137,7 @@ export const ZGetCommunityMembersResponse =
   schemaWithCursorPagination(ZMiniCommunityUser);
 export const ZGetCommunityReportsResponse =
   schemaWithCursorPagination(ZCommunityReport);
+
+export const ZGetCommunityPostsQuery = z.object({
+  cursorCreatedAt: z.string().datetime().optional(),
+});
