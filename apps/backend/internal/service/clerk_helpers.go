@@ -58,3 +58,13 @@ func displayNameFromClerkUser(u *clerk.User, email string) string {
 
 	return "New User"
 }
+
+// clerkImageURL returns Clerk's hosted avatar, or nil when the account has no
+// image -- HasImage is false for the auto-generated initials placeholder, which
+// isn't worth mirroring.
+func clerkImageURL(u *clerk.User) *string {
+	if !u.HasImage || u.ImageURL == nil || *u.ImageURL == "" {
+		return nil
+	}
+	return u.ImageURL
+}

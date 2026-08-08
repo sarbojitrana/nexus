@@ -188,7 +188,11 @@ export function ChatApp() {
                   selectedId === c.id ? "bg-surface" : ""
                 }`}
               >
-                <Avatar online={c.isGroup ? undefined : isOnline} rounded={c.isGroup ? "9px" : "full"} />
+                <Avatar
+                  online={c.isGroup ? undefined : isOnline}
+                  storageKey={other?.avatarKey}
+                  url={other?.avatarUrl}
+                />
                 <div className="flex min-w-0 flex-1 flex-col gap-px">
                   <div className="flex items-center justify-between gap-2">
                     <strong className="truncate text-[0.84rem] font-bold">{title}</strong>

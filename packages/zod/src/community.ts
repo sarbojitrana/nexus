@@ -51,7 +51,9 @@ export type MiniCommunity = z.infer<typeof ZMiniCommunity>;
 
 export const ZMiniCommunityUser = z.object({
   userId: z.string(),
+  username: z.string(),
   avatarKey: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
   name: z.string(),
   joinedAt: z.string().datetime(),
   role: ZCommunityRole,

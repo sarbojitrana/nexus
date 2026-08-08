@@ -14,6 +14,7 @@ import (
 	"github.com/sarbojitrana/nexus/internal/lib/job"
 	"github.com/sarbojitrana/nexus/internal/middleware"
 	"github.com/sarbojitrana/nexus/internal/model"
+	"github.com/sarbojitrana/nexus/internal/model/follow"
 	"github.com/sarbojitrana/nexus/internal/model/post"
 	"github.com/sarbojitrana/nexus/internal/model/user"
 	"github.com/sarbojitrana/nexus/internal/repository"
@@ -62,6 +63,7 @@ func (s *UserService) CreateFromClerk(ctx context.Context, cu *clerk.User) (*use
 		Username:    generatePlaceholderUsername(cu.ID),
 		DisplayName: displayName,
 		EmailID:     email,
+		AvatarURL:   clerkImageURL(cu),
 	})
 	if err != nil {
 		logger.Error().Err(err).Str("clerk_user_id", cu.ID).Msg("failed to create user")
@@ -163,13 +165,13 @@ func (s *UserService) UpdateFromClerk(ctx context.Context, cu *clerk.User) (*use
 		return nil, err
 	}
 
-	updated, err := s.repo.UpdateUserEmail(ctx, cu.ID, email)
+	updated, err := s.repo.UpdateFromClerkProfile(ctx, cu.ID, email, clerkImageURL(cu))
 	if err != nil {
 		logger.Error().Err(err).Str("clerk_user_id", cu.ID).Msg("failed to sync user email")
 		return nil, err
 	}
 
-	logger.Info().Str("event", "user_email_synced").Str("user_id", cu.ID).Msg("user email synced from clerk webhook")
+	logger.Info().Str("event", "user_profile_synced").Str("user_id", cu.ID).Msg("user profile synced from clerk webhook")
 	return updated, nil
 }
 
@@ -366,4 +368,52 @@ func (s *UserService) DeleteAccount(ctx context.Context, userID string) error {
 
 	logger.Info().Str("event", "user_account_deletion_requested").Str("user_id", userID).Msg("clerk account deletion requested")
 	return nil
+}
+
+func (s *UserService) BlockUser(ctx context.Context, blockerID, blockedID string) error {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	if blockerID == blockedID {
+		code := "CANNOT_BLOCK_SELF"
+		return errs.NewBadRequestError("you can't block yourself", false, &code, nil, nil)
+	}
+
+	if err := s.repo.BlockUser(ctx, blockerID, blockedID); err != nil {
+		logger.Error().Err(err).Str("blocked_id", blockedID).Msg("failed to block user")
+		return err
+	}
+
+	// Blocking implies not following -- leaving the follow in place would keep
+	// their posts in your feed via the following lane.
+	if err := s.followRepo.UnFollowUser(ctx, blockerID, &follow.UnFollowUserPayload{FollowingID: blockedID}); err != nil {
+		logger.Warn().Err(err).Str("blocked_id", blockedID).Msg("could not drop follow after blocking")
+	}
+
+	logger.Info().Str("event", "user_blocked").Str("user_id", blockerID).Str("blocked_id", blockedID).Msg("user blocked")
+	return nil
+}
+
+func (s *UserService) UnblockUser(ctx context.Context, blockerID, blockedID string) error {
+	logger := middleware.GetLoggerFromContext(ctx)
+
+	if err := s.repo.UnblockUser(ctx, blockerID, blockedID); err != nil {
+		logger.Error().Err(err).Str("blocked_id", blockedID).Msg("failed to unblock user")
+		return err
+	}
+
+	logger.Info().Str("event", "user_unblocked").Str("user_id", blockerID).Str("blocked_id", blockedID).Msg("user unblocked")
+	return nil
+}
+
+func (s *UserService) IsBlocking(ctx context.Context, blockerID, blockedID string) (bool, error) {
+	return s.repo.IsBlocking(ctx, blockerID, blockedID)
+}
+
+func (s *UserService) GetBlockedUsers(ctx context.Context, blockerID string) ([]user.MiniUser, error) {
+	blocked, err := s.repo.GetBlockedUsers(ctx, blockerID)
+	if err != nil {
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Msg("failed to list blocked users")
+		return nil, err
+	}
+	return blocked, nil
 }

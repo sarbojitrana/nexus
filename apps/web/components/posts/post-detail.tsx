@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
+import { apiErrorMessage } from "@/lib/api-error";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { formatCount, formatTimeAgo } from "@/lib/format";
 import type { PopulatedPost } from "@nexus/zod";
@@ -339,27 +340,100 @@ function CommentRow({
   comment,
   username,
   onChanged,
+  depth = 0,
 }: {
   comment: PopulatedPost;
   username: string;
   onChanged: () => void;
+  depth?: number;
 }) {
   const api = useApi();
   const { userId } = useAuth();
-  const [replies, setReplies] = useState<PopulatedPost[]>([]);
-  const [showReplies, setShowReplies] = useState(false);
 
-  async function loadReplies() {
+  const [replies, setReplies] = useState<PopulatedPost[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [showReplies, setShowReplies] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [isReplying, setIsReplying] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Replies use offset pagination (page/limit) rather than a cursor, so
+  // "load more" walks pages and appends.
+  const loadPage = useCallback(
+    async (next: number) => {
+      setIsLoading(true);
+      const res = await api.Post.getPostReplies({
+        params: { id: comment.id },
+        query: { page: next, limit: 5 },
+      }).catch(() => null);
+      setIsLoading(false);
+
+      if (!res || res.status !== 200) return;
+
+      setReplies((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        return next === 1 ? res.body.data : [...prev, ...res.body.data.filter((r) => !seen.has(r.id))];
+      });
+      setPage(res.body.page);
+      setTotalPages(res.body.totalPages);
+
+      const ids = [...new Set(res.body.data.map((r) => r.authorId))];
+      const resolved = await Promise.all(
+        ids.map((id) =>
+          api.User.getUserById({ params: { id } })
+            .then((r) => (r.status === 200 ? ([id, r.body.username] as const) : null))
+            .catch(() => null)
+        )
+      );
+      setNames((prev) => {
+        const nextNames = { ...prev };
+        resolved.forEach((entry) => {
+          if (entry) nextNames[entry[0]] = entry[1];
+        });
+        return nextNames;
+      });
+    },
+    [api, comment.id]
+  );
+
+  async function toggleReplies() {
     if (showReplies) {
       setShowReplies(false);
       return;
     }
-    const res = await api.Post.getPostReplies({
-      params: { id: comment.id },
-      query: {},
-    }).catch(() => null);
-    if (res && res.status === 200) setReplies(res.body.data);
     setShowReplies(true);
+    if (replies.length === 0) await loadPage(1);
+  }
+
+  async function submitReply() {
+    if (!replyText.trim()) return;
+    setIsSending(true);
+    setError(null);
+
+    const res = await api.Post.createPost({
+      body: {
+        postType: "comment",
+        parentPostId: comment.id,
+        content: replyText.trim(),
+        title: null,
+      },
+    }).catch(() => null);
+    setIsSending(false);
+
+    if (res && res.status === 201) {
+      setReplyText("");
+      setIsReplying(false);
+      setShowReplies(true);
+      await loadPage(1);
+      onChanged();
+      return;
+    }
+    setError(apiErrorMessage(res, "Couldn't post that reply."));
   }
 
   async function remove() {
@@ -381,10 +455,13 @@ function CommentRow({
         {comment.content}
       </p>
 
-      <div className="mt-2 flex gap-3 font-mono text-[0.68rem] text-text-faint">
+      <div className="mt-2 flex flex-wrap gap-3 font-mono text-[0.68rem] text-text-faint">
+        <button onClick={() => setIsReplying((v) => !v)} className="hover:text-accent-strong">
+          reply
+        </button>
         {comment.commentCount > 0 && (
-          <button onClick={loadReplies} className="hover:text-text-muted">
-            {showReplies ? "hide" : `${comment.commentCount} replies`}
+          <button onClick={toggleReplies} className="hover:text-text-muted">
+            {showReplies ? "hide replies" : `${comment.commentCount} replies`}
           </button>
         )}
         {comment.authorId === userId && (
@@ -394,16 +471,62 @@ function CommentRow({
         )}
       </div>
 
-      {showReplies && replies.length > 0 && (
-        <div className="mt-2 flex flex-col gap-2 border-l border-border-soft pl-3">
+      {isReplying && (
+        <div className="mt-2.5 flex flex-col gap-2">
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            rows={2}
+            autoFocus
+            placeholder={`Reply to @${username}…`}
+            className="resize-none border border-border bg-bg px-3 py-2 text-[0.84rem] placeholder:text-text-faint focus:border-accent focus:outline-none"
+          />
+          {error && <p className="font-mono text-[0.68rem] text-accent-strong">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={submitReply}
+              disabled={isSending || !replyText.trim()}
+              className="bg-accent px-3 py-1.5 font-mono text-[0.66rem] font-bold tracking-[0.05em] text-accent-text uppercase disabled:opacity-50"
+            >
+              {isSending ? "Posting…" : "Reply"}
+            </button>
+            <button
+              onClick={() => {
+                setIsReplying(false);
+                setError(null);
+              }}
+              className="px-3 py-1.5 font-mono text-[0.66rem] tracking-[0.05em] text-text-muted uppercase"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showReplies && (
+        <div className="mt-2.5 flex flex-col gap-2 border-l border-border-soft pl-3">
           {replies.map((r) => (
-            <div key={r.id}>
-              <div className="font-mono text-[0.66rem] text-text-faint">
-                {formatTimeAgo(r.createdAt)}
-              </div>
-              <p className="text-[0.84rem] whitespace-pre-wrap text-text-muted">{r.content}</p>
-            </div>
+            <CommentRow
+              key={r.id}
+              comment={r}
+              username={names[r.authorId] ?? "unknown"}
+              onChanged={() => {
+                loadPage(1);
+                onChanged();
+              }}
+              depth={depth + 1}
+            />
           ))}
+
+          {page < totalPages && (
+            <button
+              onClick={() => loadPage(page + 1)}
+              disabled={isLoading}
+              className="self-start font-mono text-[0.68rem] text-accent-strong hover:underline disabled:opacity-50"
+            >
+              {isLoading ? "loading…" : `load more replies (${page}/${totalPages})`}
+            </button>
+          )}
         </div>
       )}
     </div>
