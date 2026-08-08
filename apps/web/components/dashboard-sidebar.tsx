@@ -15,10 +15,19 @@ const NAV_LINKS = [
 
 export async function DashboardSidebar({ active }: { active: string }) {
   const api = await getServerApi();
-  const res = await api.Community.getCommunities({
-    query: { sort: "members_count", order: "desc" },
-    fetchOptions: { cache: "no-store" },
-  }).catch(() => null);
+
+  // getMe doubles as account bootstrap: it provisions the local users row from
+  // Clerk if the user.created webhook never landed. Every write in the app has
+  // a foreign key to users, so this has to succeed before anything else works.
+  const [meRes, res] = await Promise.all([
+    api.User.getMe({ fetchOptions: { cache: "no-store" } }).catch(() => null),
+    api.Community.getCommunities({
+      query: { sort: "members_count", order: "desc" },
+      fetchOptions: { cache: "no-store" },
+    }).catch(() => null),
+  ]);
+
+  const me = meRes && meRes.status === 200 ? meRes.body : null;
   const communities = res && res.status === 200 ? res.body.data.slice(0, 6) : [];
 
   return (
@@ -27,6 +36,12 @@ export async function DashboardSidebar({ active }: { active: string }) {
         <Logo />
         <UserButton />
       </div>
+
+      {me && (
+        <div className="-mt-4 font-mono text-[0.7rem] text-text-faint">
+          @{me.username}
+        </div>
+      )}
 
       <nav className="flex flex-col">
         {NAV_LINKS.map((l) => {

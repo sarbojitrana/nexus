@@ -47,11 +47,7 @@ func generateErrorCode(tableName string, errType Code) string {
 		tableName = "RECORD"
 	}
 
-	domain := strings.ToUpper(tableName)
-	// Singularize the table name
-	if strings.HasSuffix(domain, "S") && len(domain) > 1 {
-		domain = domain[:len(domain)-1]
-	}
+	domain := strings.ToUpper(singularize(tableName))
 
 	action := "ERROR"
 	switch errType {
@@ -74,6 +70,14 @@ func formatUserFriendlyMessage(sqlErr *Error) string {
 
 	switch sqlErr.Code {
 	case ForeignKeyViolation:
+		// Postgres leaves ColumnName empty for FK violations, so entityName
+		// falls back to the table being written to -- which names the wrong
+		// thing entirely ("the referenced community does not exist" when it's
+		// actually the author that's missing). The constraint name is the only
+		// place the offending column survives.
+		if ref := referencedEntityFromConstraint(sqlErr.ConstraintName, sqlErr.TableName); ref != "" {
+			return fmt.Sprintf("The referenced %s does not exist", ref)
+		}
 		return fmt.Sprintf("The referenced %s does not exist", entityName)
 	case UniqueViolation:
 		return fmt.Sprintf("A %s with this identifier already exists", entityName)
@@ -104,12 +108,7 @@ func getEntityName(tableName, columnName string) string {
 
 	// Second priority: table name (fallback option)
 	if tableName != "" {
-		// Use singular form
-		entity := tableName
-		if strings.HasSuffix(entity, "s") && len(entity) > 1 {
-			entity = entity[:len(entity)-1]
-		}
-		return humanizeText(entity)
+		return humanizeText(singularize(tableName))
 	}
 
 	// Default fallback
@@ -208,4 +207,37 @@ func HandleError(err error) error {
 	}
 
 	return errs.NewInternalServerError()
+}
+
+// referencedEntityFromConstraint recovers the offending column from a
+// foreign key constraint name, which Postgres conventionally builds as
+// "<table>_<column>_fkey" -- e.g. "communities_admin_id_fkey" yields "admin".
+// Returns "" when the name doesn't follow that convention, so the caller can
+// fall back to its own naming.
+func referencedEntityFromConstraint(constraintName, tableName string) string {
+	if constraintName == "" || !strings.HasSuffix(constraintName, "_fkey") {
+		return ""
+	}
+
+	middle := strings.TrimSuffix(constraintName, "_fkey")
+	middle = strings.TrimPrefix(middle, tableName+"_")
+
+	if middle == "" || middle == constraintName {
+		return ""
+	}
+
+	return humanizeText(strings.TrimSuffix(middle, "_id"))
+}
+
+// singularize turns a table name into its singular form. Naively trimming a
+// trailing "s" mangles the -ies plurals this schema uses ("communities" would
+// become "communitie"), so those are handled first.
+func singularize(name string) string {
+	if len(name) > 3 && strings.HasSuffix(strings.ToLower(name), "ies") {
+		return name[:len(name)-3] + "y"
+	}
+	if len(name) > 1 && strings.HasSuffix(strings.ToLower(name), "s") {
+		return name[:len(name)-1]
+	}
+	return name
 }
