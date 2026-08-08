@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { useUpload } from "@/lib/use-upload";
+import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
 import type { User } from "@nexus/zod";
 
 // Everything Nexus owns about a user lives here -- bio, username, banner, and
@@ -43,14 +44,14 @@ export function EditProfileModal({
   async function handleImage(file: File | undefined, target: "avatar" | "banner") {
     if (!file) return;
     setIsUploading(true);
-    const uploaded = await upload(file);
+    const result = await upload(file);
     setIsUploading(false);
-    if (!uploaded) {
-      setMessage("Upload failed — is storage configured?");
+    if (!result.ok) {
+      setMessage(result.error);
       return;
     }
-    if (target === "avatar") setAvatarKey(uploaded.storageKey);
-    else setBannerKey(uploaded.storageKey);
+    if (target === "avatar") setAvatarKey(result.media.storageKey);
+    else setBannerKey(result.media.storageKey);
     setMessage("Image uploaded — save to apply.");
   }
 
@@ -106,7 +107,7 @@ export function EditProfileModal({
 
         <div className="flex flex-wrap items-center gap-5">
           <div className="flex flex-col items-center gap-2">
-            <span className="h-14 w-14 bg-accent" />
+            <RemoteAvatar storageKey={avatarKey} size={56} />
             <button
               onClick={() => avatarInput.current?.click()}
               disabled={isUploading}
@@ -123,7 +124,7 @@ export function EditProfileModal({
             />
           </div>
           <div className="flex flex-1 flex-col items-center gap-2">
-            <span className="h-14 w-full bg-gradient-to-r from-accent to-down" />
+            <RemoteBanner storageKey={bannerKey} className="h-14" />
             <button
               onClick={() => bannerInput.current?.click()}
               disabled={isUploading}

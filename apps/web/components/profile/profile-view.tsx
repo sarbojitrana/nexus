@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { EditProfileModal } from "@/components/profile/edit-profile-modal";
+import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
 import { formatTimeAgo } from "@/lib/format";
 import type { User, MiniUser, PopulatedPost } from "@nexus/zod";
 
@@ -74,10 +75,11 @@ export function ProfileView({ userId }: { userId: string }) {
   const isSelf = viewerId === user.id;
 
   return (
-    <div className="mx-auto flex w-full max-w-[680px] flex-col gap-4 px-6 py-6">
-      <header className="border border-border bg-surface p-5">
-        <div className="flex flex-wrap items-start gap-4">
-          <span className="h-16 w-16 shrink-0 bg-accent" />
+    <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
+      <header className="border border-border bg-surface">
+        <RemoteBanner storageKey={user.bannerKey} className="h-32 border-b border-border" />
+        <div className="flex flex-wrap items-start gap-4 p-5">
+          <RemoteAvatar storageKey={user.avatarKey} size={72} className="-mt-12 border-2 border-surface" />
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[1.3rem] font-extrabold">@{user.username}</h1>
             <p className="mt-0.5 text-[0.88rem] text-text-muted">{user.displayName}</p>
@@ -262,7 +264,7 @@ function FollowList({ userId, kind }: { userId: string; kind: "followers" | "fol
           href={`/dashboard/profile/${u.id}`}
           className="flex items-center gap-3 border border-border bg-surface p-3.5 hover:border-accent/40"
         >
-          <span className="h-8 w-8 shrink-0 bg-accent" />
+          <RemoteAvatar storageKey={u.avatarKey} size={32} />
           <div className="min-w-0">
             <strong className="block truncate text-[0.86rem] font-bold">@{u.username}</strong>
             <span className="font-mono text-[0.66rem] text-text-faint">

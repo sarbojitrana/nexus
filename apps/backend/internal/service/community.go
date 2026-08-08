@@ -292,3 +292,12 @@ func (s *CommunityService) ResolveReport(ctx context.Context, userID string, com
 	logger.Info().Str("event", "community_report_resolved").Str("report_id", payload.ReportID.String()).Str("status", string(payload.UpdatedStatus)).Str("moderator_id", userID).Msg("report resolved")
 	return resolved, nil
 }
+
+func (s *CommunityService) GetCommunityPosts(ctx context.Context, viewerID *string, communityID uuid.UUID, cursorCreatedAt *time.Time) (*model.CursorPaginatedResponse[post.PopulatedPost], error) {
+	res, err := s.repo.GetCommunityPosts(ctx, viewerID, communityID, cursorCreatedAt)
+	if err != nil {
+		middleware.GetLoggerFromContext(ctx).Error().Err(err).Str("community_id", communityID.String()).Msg("failed to fetch community posts")
+		return nil, err
+	}
+	return res, nil
+}

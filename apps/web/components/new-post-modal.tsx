@@ -46,14 +46,14 @@ export function NewPostButton({ communityId: fixedCommunityId }: { communityId?:
     setError(null);
 
     for (const file of Array.from(files).slice(0, 8 - media.length)) {
-      const uploaded = await upload(file);
-      if (uploaded) {
+      const result = await upload(file);
+      if (result.ok) {
         setMedia((prev) => [
           ...prev,
-          { ...uploaded, name: file.name, previewUrl: URL.createObjectURL(file) },
+          { ...result.media, name: file.name, previewUrl: URL.createObjectURL(file) },
         ]);
       } else {
-        setError("Upload failed — is storage configured?");
+        setError(result.error);
       }
     }
 
