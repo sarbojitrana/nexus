@@ -107,6 +107,9 @@ func LoadConfig() (*Config, error) {
 		mainConfig.Server.Port = platformPort
 	}
 
+	mainConfig.Server.CORSAllowedOrigins = normalizeOrigins(mainConfig.Server.CORSAllowedOrigins)
+	logger.Info().Strs("cors_allowed_origins", mainConfig.Server.CORSAllowedOrigins).Msg("loaded CORS origins")
+
 	validate := validator.New()
 
 	err = validate.Struct(mainConfig)
@@ -117,4 +120,24 @@ func LoadConfig() (*Config, error) {
 
 	return mainConfig, nil
 
+}
+
+// normalizeOrigins makes CORS configuration forgiving of how it's typically
+// typed into a hosting dashboard. koanf hands a comma-separated env var back
+// as one string rather than a slice, so "a.com,b.com" would otherwise become
+// a single origin that matches nothing -- and a trailing slash silently fails
+// to match too, since browsers send the origin without one.
+func normalizeOrigins(raw []string) []string {
+	origins := make([]string, 0, len(raw))
+
+	for _, entry := range raw {
+		for _, origin := range strings.Split(entry, ",") {
+			origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+			if origin != "" {
+				origins = append(origins, origin)
+			}
+		}
+	}
+
+	return origins
 }
