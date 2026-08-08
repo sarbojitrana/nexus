@@ -715,9 +715,16 @@ func (r *PostRepository) GetPosts(ctx context.Context, userID *string, payload *
 	}
 
 	if followingUsersLimit > 0 {
+		// Your own posts belong in your feed. Without this they'd only ever
+		// surface through the trending lane, where a brand-new post scores 0
+		// on engagement decay and sinks below everything else -- so you'd
+		// publish something and not see it.
 		filter := `
-			AND p.author_id IN (
-				SELECT following_id FROM user_follows WHERE follower_id = @user_id
+			AND (
+				p.author_id = @user_id
+				OR p.author_id IN (
+					SELECT following_id FROM user_follows WHERE follower_id = @user_id
+				)
 			)
 		`
 		posts, hasMore, nextCreatedAt, err := r.fetchFollowingLane(
@@ -735,7 +742,7 @@ func (r *PostRepository) GetPosts(ctx context.Context, userID *string, payload *
 	if followingCommunitiesLimit > 0 {
 		filter := `
 			AND p.community_id IN (
-				SELECT community_id FROM community_follows WHERE user_id = @user_id
+				SELECT community_id FROM community_follows WHERE follower_id = @user_id
 			)
 		`
 		posts, hasMore, nextCreatedAt, err := r.fetchFollowingLane(

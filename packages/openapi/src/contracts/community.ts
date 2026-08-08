@@ -20,6 +20,8 @@ import {
   ZGetCommunityReportsResponse,
   ZPopulatedPost,
   ZCommunityFollow,
+  ZGetCommunityPostsQuery,
+  ZPostCommentsResponse,
 } from "@nexus/zod";
 import { getSecurityMetadata } from "@/utils.js";
 
@@ -152,6 +154,16 @@ export const communityContract = c.router(
         200: ZCommunityMember,
       },
       metadata: getSecurityMetadata(),
+    },
+    getCommunityPosts: {
+      summary: "List a community's posts",
+      method: "GET",
+      path: "/communities/:id/posts",
+      pathParams: z.object({ id: z.string().uuid() }),
+      query: ZGetCommunityPostsQuery,
+      responses: {
+        200: ZPostCommentsResponse,
+      },
     },
     getCommunityPostById: {
       summary: "Get a post within a community",

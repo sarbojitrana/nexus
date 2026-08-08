@@ -26,7 +26,7 @@ export default async function FollowingPage() {
       <HudCorners />
       <DashboardSidebar active="/dashboard/following" />
 
-      <main className="mx-auto flex w-full max-w-[660px] flex-col gap-4 px-6 py-6">
+      <main className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
         <div className="border-b border-border-soft pb-3">
           <h1 className="font-display text-[1.3rem] font-extrabold">Following</h1>
           <p className="eyebrow mt-1">posts from people and communities you follow</p>

@@ -24,6 +24,7 @@ func registerCommunityRoutes(g *echo.Group, h *handler.Handlers, mw *middleware.
 	g.GET("/communities/:id/members", h.Community.GetMembers, mw.Auth.OptionalAuth)
 	g.PATCH("/communities/:id/members/:userId/role", h.Community.ChangeMemberRole, mw.Auth.RequireAuth)
 
+	g.GET("/communities/:id/posts", h.Community.GetCommunityPosts, mw.Auth.OptionalAuth)
 	g.GET("/communities/:id/posts/:postId", h.Community.GetCommunityPostByID, mw.Auth.OptionalAuth)
 	g.DELETE("/communities/:id/posts/:postId", h.Community.DeleteCommunityPost, mw.Auth.RequireAuth)
 

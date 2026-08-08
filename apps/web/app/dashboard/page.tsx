@@ -4,6 +4,7 @@ import { FollowButton } from "@/components/follow-button";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { SearchBar } from "@/components/search-bar";
 import { NewPostButton } from "@/components/new-post-modal";
+import { RemoteAvatar } from "@/components/media/remote-image";
 import { HudCorners } from "@/components/logo";
 import { getServerApi, getServerUserId } from "@/lib/api-server";
 import { enrichPosts, dedupeAndSortByNewest } from "@/lib/enrich-posts";
@@ -41,11 +42,12 @@ export default async function DashboardPage() {
       : [];
 
   return (
-    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[236px_1fr_270px]">
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[236px_1fr]">
       <HudCorners />
       <DashboardSidebar active="/dashboard" />
 
-      <main className="flex w-full max-w-[660px] flex-col gap-4 px-6 py-6">
+      <div className="mx-auto grid w-full max-w-[1240px] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_330px]">
+      <main className="flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
         <SearchBar />
 
         <div className="flex items-center justify-between border-b border-border-soft pb-3">
@@ -75,7 +77,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-3">
             {trending.map((t) => (
               <div key={t.communityId} className="flex items-center gap-2.5">
-                <span className="h-7 w-7 shrink-0 bg-accent" />
+                <RemoteAvatar storageKey={t.communityAvatarKey} size={28} />
                 <Link href={`/dashboard/communities/${t.slug}`} className="min-w-0 flex-1">
                   <strong className="block truncate text-[0.82rem] font-bold hover:text-accent-strong">
                     n/{t.slug}
@@ -98,7 +100,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-3">
             {people.map((p) => (
               <div key={p.id} className="flex items-center gap-2.5">
-                <span className="h-7 w-7 shrink-0 bg-accent" />
+                <RemoteAvatar storageKey={p.avatarKey} size={28} />
                 <Link href={`/dashboard/profile/${p.id}`} className="min-w-0 flex-1">
                   <strong className="block truncate text-[0.82rem] font-bold hover:text-accent-strong">
                     @{p.username}
@@ -116,6 +118,7 @@ export default async function DashboardPage() {
           </div>
         </section>
       </aside>
+      </div>
     </div>
   );
 }
