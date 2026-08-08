@@ -296,7 +296,7 @@ func (r *CommunityRepository) GetCommunityMembers(ctx context.Context, userID st
 	}
 
 	stmt := `
-		SELECT cm.user_id, u.avatar_key, u.display_name AS name, cm.joined_at, cm.role
+		SELECT cm.user_id, u.username, u.avatar_key, u.avatar_url, u.display_name AS name, cm.joined_at, cm.role
 		FROM community_members cm
 		JOIN users u ON u.id = cm.user_id
 		WHERE cm.community_id = @community_id

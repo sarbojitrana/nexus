@@ -6,7 +6,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { EditProfileModal } from "@/components/profile/edit-profile-modal";
-import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
+import { RemoteAvatar } from "@/components/media/remote-image";
+import { ZoomableAvatar, ZoomableBanner } from "@/components/media/zoomable";
 import { formatTimeAgo } from "@/lib/format";
 import type { User, MiniUser, PopulatedPost } from "@nexus/zod";
 
@@ -22,6 +23,7 @@ export function ProfileView({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>("Posts");
   const [isFollowing, setIsFollowing] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const load = useCallback(async () => {
     const isSelf = viewerId === userId;
@@ -36,14 +38,30 @@ export function ProfileView({ userId }: { userId: string }) {
     setUser(res.body);
 
     if (viewerId && viewerId !== userId) {
-      const followRes = await api.User.isFollowingUser({ params: { id: userId } }).catch(() => null);
+      const [followRes, blockRes] = await Promise.all([
+        api.User.isFollowingUser({ params: { id: userId } }).catch(() => null),
+        api.User.isBlockingUser({ params: { id: userId } }).catch(() => null),
+      ]);
       setIsFollowing(followRes?.status === 204);
+      setIsBlocked(blockRes?.status === 204);
     }
   }, [api, userId, viewerId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  async function toggleBlock() {
+    const action = isBlocked
+      ? api.User.unblockUser({ params: { id: userId } })
+      : api.User.blockUser({ params: { id: userId } });
+    const res = await action.catch(() => null);
+    if (res && res.status === 204) {
+      setIsBlocked(!isBlocked);
+      // Blocking drops the follow server-side, so refetch rather than guess.
+      load();
+    }
+  }
 
   async function toggleFollow() {
     const action = isFollowing
@@ -77,9 +95,9 @@ export function ProfileView({ userId }: { userId: string }) {
   return (
     <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
       <header className="border border-border bg-surface">
-        <RemoteBanner storageKey={user.bannerKey} className="h-32 border-b border-border" />
+        <ZoomableBanner storageKey={user.bannerKey} className="h-32 border-b border-border" />
         <div className="flex flex-wrap items-start gap-4 p-5">
-          <RemoteAvatar storageKey={user.avatarKey} size={72} className="-mt-12 border-2 border-surface" />
+          <ZoomableAvatar storageKey={user.avatarKey} url={user.avatarUrl} size={72} className="-mt-12 border-2 border-surface" />
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[1.3rem] font-extrabold">@{user.username}</h1>
             <p className="mt-0.5 text-[0.88rem] text-text-muted">{user.displayName}</p>
@@ -95,9 +113,20 @@ export function ProfileView({ userId }: { userId: string }) {
           </div>
 
           {!isSelf && (
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                onClick={toggleBlock}
+                className={`px-4 py-2 font-mono text-[0.7rem] font-bold tracking-[0.06em] uppercase ${
+                  isBlocked
+                    ? "border border-accent text-accent-strong hover:bg-accent/10"
+                    : "border border-border text-text-faint hover:border-accent/40 hover:text-accent-strong"
+                }`}
+              >
+                {isBlocked ? "Unblock" : "Block"}
+              </button>
               <button
                 onClick={toggleFollow}
+                disabled={isBlocked}
                 className={`px-5 py-2 font-mono text-[0.7rem] font-bold tracking-[0.06em] uppercase ${
                   isFollowing
                     ? "border border-border text-text-muted hover:border-accent/40"
@@ -106,7 +135,7 @@ export function ProfileView({ userId }: { userId: string }) {
               >
                 {isFollowing ? "Following" : "Follow"}
               </button>
-              <StartChatButton userId={user.id} />
+              {!isBlocked && <StartChatButton userId={user.id} />}
             </div>
           )}
           {isSelf && (
@@ -264,7 +293,7 @@ function FollowList({ userId, kind }: { userId: string; kind: "followers" | "fol
           href={`/dashboard/profile/${u.id}`}
           className="flex items-center gap-3 border border-border bg-surface p-3.5 hover:border-accent/40"
         >
-          <RemoteAvatar storageKey={u.avatarKey} size={32} />
+          <RemoteAvatar storageKey={u.avatarKey} url={u.avatarUrl} size={32} />
           <div className="min-w-0">
             <strong className="block truncate text-[0.86rem] font-bold">@{u.username}</strong>
             <span className="font-mono text-[0.66rem] text-text-faint">

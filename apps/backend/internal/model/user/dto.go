@@ -14,6 +14,7 @@ type CreateUserPayload struct {
 	ClerkID     string  `json:"clerkId" validate:"required"`
 	Bio         *string `json:"bio" validate:"omitempty,max=1000"`
 	AvatarKey   *string `json:"avatarKey"`
+	AvatarURL   *string `json:"avatarUrl"`
 	BannerKey   *string `json:"bannerKey"`
 }
 

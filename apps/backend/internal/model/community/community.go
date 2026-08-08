@@ -85,7 +85,9 @@ type BannedFromCommunityUser struct {
 
 type MiniCommunityUser struct {
 	UserID    string        `json:"userId" db:"user_id"`
+	Username  string        `json:"username" db:"username"`
 	AvatarKey *string       `json:"avatarKey" db:"avatar_key"`
+	AvatarURL *string       `json:"avatarUrl" db:"avatar_url"`
 	Name      string        `json:"name" db:"name"`
 	JoinedAt  time.Time     `json:"joinedAt" db:"joined_at"`
 	Role      CommunityRole `json:"role" db:"role"`

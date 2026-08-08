@@ -31,6 +31,7 @@ type User struct {
 	DisplayName           string                `json:"displayName" db:"display_name"`
 	Bio                   *string               `json:"bio" db:"bio"`
 	AvatarKey             *string               `json:"avatarKey" db:"avatar_key"`
+	AvatarURL             *string               `json:"avatarUrl" db:"avatar_url"`
 	BannerKey             *string               `json:"bannerKey" db:"banner_key"`
 	FollowerCount         int                   `json:"followerCount" db:"follower_count"`
 	FollowingCount        int                   `json:"followingCount" db:"following_count"`
@@ -46,6 +47,7 @@ type MiniUser struct {
 	Username      string    `json:"username" db:"username"`
 	DisplayName   string    `json:"displayName" db:"display_name"`
 	AvatarKey     *string   `json:"avatarKey" db:"avatar_key"`
+	AvatarURL     *string   `json:"avatarUrl" db:"avatar_url"`
 	Bio           *string   `json:"bio" db:"bio"`
 	FollowerCount int       `json:"followerCount" db:"follower_count"`
 	CreatedAt     time.Time `json:"createdAt" db:"created_at"`
