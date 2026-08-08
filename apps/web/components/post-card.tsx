@@ -5,43 +5,7 @@ import { useState } from "react";
 import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { formatCount, formatTimeAgo } from "@/lib/format";
-import type { PopulatedPost, PostMedia } from "@nexus/zod";
-
-export type PostCardData = {
-  id: string;
-  communitySlug: string | null;
-  communityId: string | null;
-  authorUsername: string;
-  authorId: string;
-  createdAt: string;
-  title: string | null;
-  content: string | null;
-  upvotes: number;
-  downvotes: number;
-  commentCount: number;
-  media: PostMedia[];
-};
-
-export function toPostCardData(
-  post: PopulatedPost,
-  authorUsername: string,
-  communitySlug: string | null
-): PostCardData {
-  return {
-    id: post.id,
-    communitySlug,
-    communityId: post.communityId,
-    authorUsername,
-    authorId: post.authorId,
-    createdAt: post.createdAt,
-    title: post.title,
-    content: post.content,
-    upvotes: post.upvotes,
-    downvotes: post.downvotes,
-    commentCount: post.commentCount,
-    media: post.postMedia ?? [],
-  };
-}
+import type { PostCardData } from "@/lib/post-card-data";
 
 export function PostCard({ post, hideCommunity }: { post: PostCardData; hideCommunity?: boolean }) {
   const api = useApi();
@@ -139,3 +103,5 @@ export function PostCard({ post, hideCommunity }: { post: PostCardData; hideComm
     </article>
   );
 }
+
+export type { PostCardData };
