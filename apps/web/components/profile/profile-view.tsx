@@ -8,6 +8,7 @@ import { MediaGallery } from "@/components/media/media-gallery";
 import { EditProfileModal } from "@/components/profile/edit-profile-modal";
 import { RemoteAvatar } from "@/components/media/remote-image";
 import { ZoomableAvatar, ZoomableBanner } from "@/components/media/zoomable";
+import { ShareButton } from "@/components/share-button";
 import { formatTimeAgo } from "@/lib/format";
 import type { User, MiniUser, PopulatedPost } from "@nexus/zod";
 
@@ -93,7 +94,7 @@ export function ProfileView({ userId }: { userId: string }) {
   const isSelf = viewerId === user.id;
 
   return (
-    <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
+    <div className="mx-auto flex min-h-0 w-full max-w-[820px] flex-col gap-4 overflow-y-auto px-6 py-6">
       <header className="border border-border bg-surface">
         <ZoomableBanner storageKey={user.bannerKey} className="h-32 border-b border-border" />
         <div className="flex flex-wrap items-start gap-4 p-5">
@@ -109,6 +110,10 @@ export function ProfileView({ userId }: { userId: string }) {
               <span>{user.followingCount} following</span>
               <span>{user.postsCount} posts</span>
               <span>joined {formatTimeAgo(user.createdAt)}</span>
+              <ShareButton
+                path={`/dashboard/profile/${user.id}`}
+                title={`@${user.username} on Nexus`}
+              />
             </div>
           </div>
 

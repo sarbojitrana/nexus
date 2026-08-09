@@ -115,7 +115,7 @@ export function ChatApp() {
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
   return (
-    <div className="grid h-[calc(100dvh-0px)] grid-cols-1 md:grid-cols-[340px_1fr]">
+    <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden md:grid-cols-[340px_1fr]">
       <div className="flex flex-col border-r border-border-soft">
         <div className="flex flex-col gap-3 border-b border-border-soft px-4 py-3.5">
           <div className="flex items-center justify-between">

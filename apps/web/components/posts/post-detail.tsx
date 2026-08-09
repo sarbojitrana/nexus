@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { apiErrorMessage } from "@/lib/api-error";
+import { ShareButton } from "@/components/share-button";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { formatCount, formatTimeAgo } from "@/lib/format";
 import type { PopulatedPost } from "@nexus/zod";
@@ -158,7 +159,7 @@ export function PostDetail({ postId }: { postId: string }) {
   const score = post.upvotes - post.downvotes;
 
   return (
-    <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6">
+    <div className="mx-auto flex min-h-0 w-full max-w-[820px] flex-col gap-4 overflow-y-auto px-6 py-6">
       {banner && (
         <div className="border border-accent/40 bg-accent/5 px-4 py-2.5 font-mono text-[0.74rem] text-accent-strong">
           {banner}
@@ -464,6 +465,7 @@ function CommentRow({
             {showReplies ? "hide replies" : `${comment.commentCount} replies`}
           </button>
         )}
+        <ShareButton path={`/dashboard/posts/${comment.id}`} />
         {comment.authorId === userId && (
           <button onClick={remove} className="hover:text-accent-strong">
             delete

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
+import { NavUnread } from "@/components/nav-unread";
 import { StatusReadout } from "@/components/status-readout";
 import { getServerApi } from "@/lib/api-server";
 
@@ -8,8 +9,8 @@ const NAV_LINKS = [
   { label: "Home feed", href: "/dashboard" },
   { label: "Communities", href: "/dashboard/communities" },
   { label: "Following", href: "/dashboard/following" },
-  { label: "Messages", href: "/dashboard/messages" },
-  { label: "Notifications", href: "/dashboard/notifications" },
+  { label: "Messages", href: "/dashboard/messages", unread: "messages" as const },
+  { label: "Notifications", href: "/dashboard/notifications", unread: "notifications" as const },
   { label: "Profile", href: "/dashboard/profile" },
 ];
 
@@ -31,7 +32,7 @@ export async function DashboardSidebar({ active }: { active: string }) {
   const communities = res && res.status === 200 ? res.body.data.slice(0, 6) : [];
 
   return (
-    <aside className="hidden flex-col gap-7 border-r border-border-soft px-5 py-6 lg:flex">
+    <aside className="hidden min-h-0 flex-col gap-7 overflow-y-auto border-r border-border-soft px-5 py-6 lg:flex">
       <div className="flex items-start justify-between">
         <Logo />
         <UserButton />
@@ -58,6 +59,7 @@ export async function DashboardSidebar({ active }: { active: string }) {
             >
               <span className={isActive ? "text-accent" : "opacity-0"}>›</span>
               {l.label}
+              {l.unread && <NavUnread kind={l.unread} />}
             </Link>
           );
         })}

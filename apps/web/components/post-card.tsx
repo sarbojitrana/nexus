@@ -6,6 +6,7 @@ import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { formatCount, formatTimeAgo } from "@/lib/format";
 import { notify } from "@/lib/notify";
+import { ShareButton } from "@/components/share-button";
 import { apiErrorMessage } from "@/lib/api-error";
 import type { PostCardData } from "@/lib/post-card-data";
 
@@ -137,6 +138,7 @@ export function PostCard({ post, hideCommunity }: { post: PostCardData; hideComm
           <Link href={`/dashboard/posts/${post.id}`} className="hover:text-text-muted">
             {commentCount} comments
           </Link>
+          <ShareButton path={`/dashboard/posts/${post.id}`} title={post.title ?? undefined} />
         </div>
 
         {isCommenting && (

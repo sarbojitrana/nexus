@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
 import type { SearchResults } from "@nexus/zod";
 
@@ -10,6 +11,7 @@ type Filter = (typeof FILTERS)[number];
 
 export function SearchBar() {
   const api = useApi();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [results, setResults] = useState<SearchResults | null>(null);
@@ -60,7 +62,14 @@ export function SearchBar() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => setIsOpen(true)}
-        placeholder="Search posts, people, communities…"
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          const q = query.trim();
+          if (!q) return;
+          setIsOpen(false);
+          router.push(`/dashboard/search?q=${encodeURIComponent(q)}`);
+        }}
+        placeholder="Search posts, people, communities… (enter for all results)"
         className="w-full border border-border bg-surface px-3.5 py-2.5 font-mono text-[0.8rem] text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
       />
 

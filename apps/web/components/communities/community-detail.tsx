@@ -8,6 +8,7 @@ import { useUpload } from "@/lib/use-upload";
 import { apiErrorMessage } from "@/lib/api-error";
 import { RemoteAvatar, RemoteBanner } from "@/components/media/remote-image";
 import { ZoomableAvatar, ZoomableBanner } from "@/components/media/zoomable";
+import { ShareButton } from "@/components/share-button";
 import { NewPostButton } from "@/components/new-post-modal";
 import { formatTimeAgo } from "@/lib/format";
 import type {
@@ -75,7 +76,7 @@ export function CommunityDetail({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 px-6 py-6">
+    <div className="mx-auto flex min-h-0 w-full max-w-[880px] flex-col gap-4 overflow-y-auto px-6 py-6">
       {banner && (
         <div className="border border-accent/40 bg-accent/5 px-4 py-2.5 font-mono text-[0.74rem] text-accent-strong">
           {banner}
@@ -98,6 +99,10 @@ export function CommunityDetail({ slug }: { slug: string }) {
               <span>{community.membersCount} members</span>
               <span>{community.postsCount} posts</span>
               <span>created {formatTimeAgo(community.createdAt)}</span>
+              <ShareButton
+                path={`/dashboard/communities/${community.slug}`}
+                title={`n/${community.slug} on Nexus`}
+              />
               {community.viewerRole && (
                 <span className="text-accent-strong">your role: {community.viewerRole}</span>
               )}
