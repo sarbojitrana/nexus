@@ -7,6 +7,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/use-api";
 import { apiErrorMessage } from "@/lib/api-error";
 import { ShareButton } from "@/components/share-button";
+import { VoteButtons } from "@/components/vote-buttons";
 import { MediaGallery } from "@/components/media/media-gallery";
 import { formatCount, formatTimeAgo } from "@/lib/format";
 import type { PopulatedPost } from "@nexus/zod";
@@ -445,6 +446,13 @@ function CommentRow({
   return (
     <div className="border border-border bg-surface p-3.5">
       <div className="flex flex-wrap items-center gap-2 font-mono text-[0.68rem] text-text-faint">
+        <VoteButtons
+          postId={comment.id}
+          upvotes={comment.upvotes}
+          downvotes={comment.downvotes}
+          layout="row"
+        />
+        <span>·</span>
         <Link href={`/dashboard/profile/${comment.authorId}`} className="hover:text-text-muted">
           @{username}
         </Link>

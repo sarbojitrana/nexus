@@ -101,3 +101,56 @@ h3 {
   border-bottom: 1.5px solid;
   border-right: 1.5px solid;
 }
+
+/* Scrollbars: the browser default light-grey bar sits badly against the dark
+   HUD surfaces. Square, thin, and accent-tinted on hover to match everything
+   else -- no rounded corners anywhere in this design. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-left: 1px solid var(--color-border-soft);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border: 2px solid var(--color-bg);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Marching dashes while the next page loads. */
+@keyframes feed-scan {
+  from { background-position: 0 0; }
+  to { background-position: 24px 0; }
+}
+
+.feed-scanline {
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-accent) 0 8px,
+    transparent 8px 24px
+  );
+  animation: feed-scan 700ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-scanline {
+    animation: none;
+  }
+}

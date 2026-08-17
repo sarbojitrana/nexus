@@ -127,18 +127,33 @@ export function FeedList({
         <PostCard key={p.id} post={p} />
       ))}
 
-      <div ref={sentinelRef} className="py-2 text-center">
-        {isLoading && <span className="font-mono text-[0.72rem] text-text-faint">loading…</span>}
+      <div ref={sentinelRef} className="py-3">
+        {isLoading && (
+          <div className="flex flex-col gap-2">
+            <div className="feed-scanline" />
+            <span className="text-center font-mono text-[0.66rem] tracking-[0.14em] text-text-faint uppercase">
+              loading
+            </span>
+          </div>
+        )}
+
         {!isLoading && hasMore && (
           <button
             onClick={loadMore}
-            className="font-mono text-[0.72rem] text-accent-strong hover:underline"
+            className="group flex w-full items-center gap-3 font-mono text-[0.66rem] tracking-[0.14em] text-text-faint uppercase"
           >
-            load more
+            <span className="h-px flex-1 bg-border transition-colors group-hover:bg-accent/50" />
+            <span className="transition-colors group-hover:text-accent-strong">load more ↓</span>
+            <span className="h-px flex-1 bg-border transition-colors group-hover:bg-accent/50" />
           </button>
         )}
+
         {!hasMore && (
-          <span className="font-mono text-[0.68rem] text-text-faint">— end of feed —</span>
+          <div className="flex w-full items-center gap-3 font-mono text-[0.62rem] tracking-[0.16em] text-text-faint uppercase">
+            <span className="h-px flex-1 bg-border-soft" />
+            <span>end of feed</span>
+            <span className="h-px flex-1 bg-border-soft" />
+          </div>
         )}
       </div>
     </>

@@ -4,19 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { useApi } from "@/lib/use-api";
 import { MediaGallery } from "@/components/media/media-gallery";
-import { formatCount, formatTimeAgo } from "@/lib/format";
+import { formatTimeAgo } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import { ShareButton } from "@/components/share-button";
 import { apiErrorMessage } from "@/lib/api-error";
+import { VoteButtons } from "@/components/vote-buttons";
 import type { PostCardData } from "@/lib/post-card-data";
 
 export function PostCard({ post, hideCommunity }: { post: PostCardData; hideCommunity?: boolean }) {
   const api = useApi();
-  // Optimistic vote state -- the API returns 204 with no body, and there's no
-  // "my vote" field on the post, so the UI tracks the delta locally.
-  const [vote, setVote] = useState<"upvote" | "downvote" | null>(null);
-  const [delta, setDelta] = useState(0);
-
   const [isCommenting, setIsCommenting] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -48,54 +44,9 @@ export function PostCard({ post, hideCommunity }: { post: PostCardData; hideComm
     setError(apiErrorMessage(res, "Couldn't post that comment."));
   }
 
-  async function react(reaction: "upvote" | "downvote") {
-    const previous = vote;
-    const next = previous === reaction ? null : reaction;
-
-    const base = previous === "upvote" ? -1 : previous === "downvote" ? 1 : 0;
-    const add = next === "upvote" ? 1 : next === "downvote" ? -1 : 0;
-
-    setVote(next);
-    setDelta(delta + base + add);
-
-    const res = await api.Post.reactToPost({
-      params: { id: post.id },
-      body: { reaction },
-    }).catch(() => null);
-
-    if (!res || (res.status !== 204 && res.status !== 200)) {
-      setVote(previous);
-      setDelta(delta);
-    }
-  }
-
-  const score = post.upvotes - post.downvotes + delta;
-
   return (
     <article className="flex gap-4 border border-border bg-surface p-4">
-      <div className="flex min-w-[34px] flex-col items-center gap-1">
-        <button
-          onClick={() => react("upvote")}
-          aria-label="Upvote"
-          className={`font-mono text-[0.9rem] leading-none ${
-            vote === "upvote" ? "text-up" : "text-text-faint hover:text-up"
-          }`}
-        >
-          ▲
-        </button>
-        <span className="font-mono text-[0.78rem] font-bold tabular-nums">
-          {formatCount(score)}
-        </span>
-        <button
-          onClick={() => react("downvote")}
-          aria-label="Downvote"
-          className={`font-mono text-[0.9rem] leading-none ${
-            vote === "downvote" ? "text-down" : "text-text-faint hover:text-down"
-          }`}
-        >
-          ▼
-        </button>
-      </div>
+      <VoteButtons postId={post.id} upvotes={post.upvotes} downvotes={post.downvotes} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[0.7rem] text-text-faint">
